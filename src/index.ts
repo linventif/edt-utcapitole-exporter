@@ -216,147 +216,126 @@ async function main() {
 
 		if (isOnSchedulePage2) {
 			console.log(
-				'SUCCESS: Forced selection + Open button worked! We are now on the schedule page.'
+				'SUCCESS: Database opened! We are now on the schedule page.'
 			);
-		} else {
-			console.log(
-				'Forced selection + Open button may not have worked, checking what happened...'
-			);
-		}
 
-		// Wait here for debugging - keep browser open to see what opens
-		console.log(
-			'DEBUGGING: Pausing here to see which database actually opens...'
-		);
-		await new Promise((resolve) => setTimeout(resolve, 60000)); // Wait 1 minute for debugging
+			// Now navigate the tree structure
+			console.log('Starting tree navigation...');
 
-		/* COMMENTED OUT FOR DEBUGGING - UNCOMMENT AFTER FIXING SELECTION
-		// Wait for the next page to load
-		await page.waitForNavigation({
-			waitUntil: 'networkidle2',
-			timeout: 30000,
-		});
+			// Wait for the tree structure to load properly
+			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-		console.log(
-			'Navigation completed. You can now interact with the schedule interface.'
-		);
-
-		// Wait for the tree structure to load
-		console.log('Waiting for tree structure to load...');
-		await page.waitForSelector('.x-tree3-node-text', {
-			visible: true,
-			timeout: 30000,
-		});
-
-		// Wait a bit more for all tree elements to load properly
-		await new Promise((resolve) => setTimeout(resolve, 2000));
-
-		// Click on "Trainees" element
-		console.log('Looking for Trainees element...');
-		const traineesClicked = await page.evaluate(() => {
-			// Method 1: Try clicking the expand/collapse icon (joint) first
-			const traineesSpans = Array.from(
-				document.querySelectorAll('span.x-tree3-node-text')
-			).filter((span) => span.textContent?.trim() === 'Trainees');
-
-			if (traineesSpans.length > 0) {
-				const traineesSpan = traineesSpans[0];
-				console.log('Found Trainees span:', traineesSpan);
-
-				if (traineesSpan) {
-					// Find the tree node container
-					const treeEl = traineesSpan.closest('.x-tree3-el');
-					if (treeEl) {
-						// Look for the joint (expand/collapse) icon
-						const jointImg = treeEl.querySelector(
+			// Step 1: Click on Trainees expand icon
+			console.log('Step 1: Clicking on Trainees expand icon...');
+			try {
+				// Find and click the joint (expand icon) within the Trainees element
+				const traineesJointClicked = await page.evaluate(() => {
+					const traineesCell = document.getElementById('x-auto-247');
+					if (traineesCell) {
+						const jointImg = traineesCell.querySelector(
 							'img.x-tree3-node-joint'
 						);
 						if (jointImg) {
-							console.log(
-								'Found joint icon, clicking to expand...'
-							);
 							(jointImg as HTMLElement).click();
+							console.log('Clicked Trainees expand icon');
 							return true;
 						}
-
-						// If no joint, try clicking the tree element itself
-						console.log('No joint found, clicking tree element...');
-						(treeEl as HTMLElement).click();
-						return true;
 					}
+					return false;
+				});
 
-					// Fallback: click the span directly
-					console.log('Clicking Trainees span directly...');
-					(traineesSpan as HTMLElement).click();
-					return true;
+				if (traineesJointClicked) {
+					console.log('Successfully clicked Trainees expand icon');
+				} else {
+					throw new Error('Could not find Trainees expand icon');
 				}
-			}
-
-			// Method 2: Try the td cell approach
-			const traineesCell = document.querySelector(
-				'td[role="gridcell"].x-treegrid-column'
-			);
-			if (traineesCell) {
-				const traineesSpan = traineesCell.querySelector(
-					'span.x-tree3-node-text'
-				);
-				if (
-					traineesSpan &&
-					traineesSpan.textContent?.trim() === 'Trainees'
-				) {
-					console.log('Found Trainees cell, clicking...');
-					(traineesCell as HTMLElement).click();
-					return true;
-				}
-			}
-
-			console.log('Could not find Trainees element');
-			return false;
-		});
-
-		if (traineesClicked) {
-			console.log('Successfully clicked on Trainees!');
-		} else {
-			throw new Error('Could not find or click Trainees element');
-		}
-
-		// Wait for the Trainees section to expand
-		await new Promise((resolve) => setTimeout(resolve, 2000));
-
-		// Click on "UFR Informatique" element
-		console.log('Looking for UFR Informatique element...');
-		const ufrClicked = await page.evaluate(() => {
-			const treeTexts = Array.from(
-				document.querySelectorAll('span.x-tree3-node-text')
-			);
-			const ufrElement = treeTexts.find(
-				(span) => span.textContent?.trim() === 'UFR Informatique'
-			);
-			if (ufrElement) {
+			} catch (error) {
 				console.log(
-					'Found UFR Informatique element, clicking...',
-					ufrElement
+					'Fallback: trying to click Trainees cell directly:',
+					error
 				);
-				(ufrElement as HTMLElement).click();
-				return true;
+				await page.click('#x-auto-247');
 			}
-			console.log('Could not find UFR Informatique element');
-			return false;
-		});
 
-		if (ufrClicked) {
-			console.log('Successfully clicked on UFR Informatique!');
+			// Wait for expansion
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+
+			// Step 2: Click on UFR Informatique expand icon
+			console.log('Step 2: Clicking on UFR Informatique expand icon...');
+			try {
+				// Find and click the joint (expand icon) within the UFR Informatique element
+				const ufrJointClicked = await page.evaluate(() => {
+					const ufrCell = document.getElementById('x-auto-292');
+					if (ufrCell) {
+						const jointImg = ufrCell.querySelector(
+							'img.x-tree3-node-joint'
+						);
+						if (jointImg) {
+							(jointImg as HTMLElement).click();
+							console.log('Clicked UFR Informatique expand icon');
+							return true;
+						}
+					}
+					return false;
+				});
+
+				if (ufrJointClicked) {
+					console.log(
+						'Successfully clicked UFR Informatique expand icon'
+					);
+				} else {
+					throw new Error(
+						'Could not find UFR Informatique expand icon'
+					);
+				}
+			} catch (error) {
+				console.log(
+					'Fallback: trying to click UFR Informatique cell directly:',
+					error
+				);
+				await page.click('#x-auto-292');
+			}
+
+			// Wait for expansion
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+
+			// Step 3: Click on M1 MIAGE to select it (final selection)
+			console.log('Step 3: Clicking on M1 MIAGE...');
+			try {
+				await page.click('#x-auto-316');
+				console.log('Successfully clicked M1 MIAGE element');
+			} catch (error) {
+				console.log(
+					'Direct click failed, trying fallback for M1 MIAGE:',
+					error
+				);
+				// Fallback: Find M1 MIAGE by text content
+				await page.evaluate(() => {
+					const treeTexts = Array.from(
+						document.querySelectorAll('span.x-tree3-node-text')
+					);
+					const miageElement = treeTexts.find(
+						(span) => span.textContent?.trim() === 'M1 MIAGE'
+					);
+
+					if (miageElement) {
+						console.log(
+							'Found M1 MIAGE element via fallback, clicking...'
+						);
+						(miageElement as HTMLElement).click();
+					}
+				});
+			}
+
+			console.log('Tree navigation completed successfully!');
 		} else {
-			throw new Error('Could not find or click UFR Informatique element');
+			console.log(
+				'Database may not have opened properly, checking what happened...'
+			);
 		}
-
-		// Wait for the UFR Informatique section to expand
-		await new Promise((resolve) => setTimeout(resolve, 2000));
-
-		console.log('Tree navigation completed successfully.');
-		*/
 
 		// Keep the browser open for manual interaction
+		console.log('Keeping browser open for 2 minutes to see the results...');
 		await new Promise((resolve) => setTimeout(resolve, 120000)); // 2 minutes timeout
 	} catch (error) {
 		console.error('An error occurred:', error);
