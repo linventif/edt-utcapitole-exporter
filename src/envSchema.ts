@@ -9,6 +9,7 @@ export const envSchema = z.object({
 		.optional(),
 	AUTH_USERNAME: z.string().nonempty('AUTH_USERNAME is required'),
 	AUTH_PASSWORD: z.string().nonempty('AUTH_PASSWORD is required'),
+	DOWNLOAD_PATH: z.string().nonempty('DOWNLOAD_PATH is required'),
 });
 
 // Validate the environment variables
