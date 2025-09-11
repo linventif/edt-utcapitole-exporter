@@ -328,6 +328,179 @@ async function main() {
 			}
 
 			console.log('Tree navigation completed successfully!');
+
+			// Wait a moment for the schedule to fully load
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+
+			// Extract date information for filename
+			console.log('Extracting date information for filename...');
+			const dateInfo = await page.evaluate(() => {
+				const dateLabels = Array.from(
+					document.querySelectorAll('.labelLegend')
+				);
+				let startDate = '';
+				let endDate = '';
+
+				// Look for date patterns in the labels
+				dateLabels.forEach((label) => {
+					const text = label.textContent?.trim();
+					if (text && text.includes('/')) {
+						// Extract dates like "Lundi 08/09/2025" or "Dimanche 14/09/2025"
+						const dateMatch = text.match(/(\d{2}\/\d{2}\/\d{4})/);
+						if (dateMatch && dateMatch[1]) {
+							const date = dateMatch[1];
+							if (!startDate || date < startDate) {
+								startDate = date;
+							}
+							if (!endDate || date > endDate) {
+								endDate = date;
+							}
+						}
+					}
+				});
+
+				return { startDate, endDate };
+			});
+
+			// Format the filename based on the extracted dates
+			let baseFilename = 'schedule';
+			if (dateInfo.startDate && dateInfo.endDate) {
+				// Convert DD/MM/YYYY to YYYY-MM-DD format
+				const formatDate = (dateStr: string) => {
+					const [day, month, year] = dateStr.split('/');
+					return `${year}-${month}-${day}`;
+				};
+
+				const formattedStartDate = formatDate(dateInfo.startDate);
+				const formattedEndDate = formatDate(dateInfo.endDate);
+				baseFilename = `${formattedStartDate}_to_${formattedEndDate}`;
+			}
+
+			console.log(`Target filename: ${baseFilename}.ics`);
+			console.log(
+				`Date range: ${dateInfo.startDate} to ${dateInfo.endDate}`
+			); // Export as ICS file by clicking the export button
+			console.log('Clicking export button to generate ICS file...');
+			try {
+				// Click the export button using the provided ID
+				await page.click('#x-auto-142');
+				console.log('Clicked export button');
+
+				// Wait for popup to appear
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+
+				// Look for and click the OK button in the popup
+				console.log('Looking for OK button in popup...');
+				const okClicked = await page.evaluate(() => {
+					// Look for the shadow popup first
+					const shadowElement =
+						document.querySelector('.x-shadow.x-ignore');
+					if (shadowElement) {
+						console.log('Found popup shadow element');
+					}
+
+					// Look for OK button
+					const buttons = Array.from(
+						document.querySelectorAll('button.x-btn-text')
+					);
+					const okButton = buttons.find(
+						(btn) => btn.textContent?.trim().toLowerCase() === 'ok'
+					);
+
+					if (okButton) {
+						console.log('Found OK button, clicking...');
+						(okButton as HTMLElement).click();
+						return true;
+					}
+
+					console.log('OK button not found');
+					return false;
+				});
+
+				if (okClicked) {
+					console.log(
+						'✅ OK button clicked - ICS download should start'
+					);
+
+					// Wait for download to complete
+					await new Promise((resolve) => setTimeout(resolve, 5000));
+
+					// Move the downloaded file from DOWNLOAD_PATH to export directory
+					const fs = require('fs');
+					const path = require('path');
+
+					const exportDir = path.join(process.cwd(), 'export');
+					if (!fs.existsSync(exportDir)) {
+						fs.mkdirSync(exportDir, { recursive: true });
+						console.log('Created export directory');
+					}
+
+					// Try to find the downloaded ICS file in the download directory
+					const downloadDir = env.DOWNLOAD_PATH;
+					const targetPath = path.join(
+						exportDir,
+						`${baseFilename}.ics`
+					);
+
+					try {
+						// Look for .ics files in download directory
+						const files = fs.readdirSync(downloadDir);
+						const icsFiles = files.filter((file: string) =>
+							file.endsWith('.ics')
+						);
+
+						if (icsFiles.length > 0) {
+							// Sort by modification time to get the most recent file
+							const icsFilesWithStats = icsFiles.map(
+								(file: string) => ({
+									name: file,
+									path: path.join(downloadDir, file),
+									stat: fs.statSync(
+										path.join(downloadDir, file)
+									),
+								})
+							);
+
+							// Sort by modification time (most recent first)
+							icsFilesWithStats.sort(
+								(a: any, b: any) =>
+									b.stat.mtime.getTime() -
+									a.stat.mtime.getTime()
+							);
+
+							const mostRecentFile = icsFilesWithStats[0];
+							const sourcePath = mostRecentFile.path;
+
+							console.log(
+								`Found ${icsFiles.length} ICS file(s), using most recent: ${mostRecentFile.name}`
+							);
+
+							fs.copyFileSync(sourcePath, targetPath);
+
+							// Optional: remove the original download file
+							fs.unlinkSync(sourcePath);
+
+							console.log(
+								`✅ ICS file successfully moved to: ${targetPath}`
+							);
+						} else {
+							console.log(
+								'❌ No ICS file found in download directory'
+							);
+							console.log(`Checked directory: ${downloadDir}`);
+						}
+					} catch (error) {
+						console.log('Error moving ICS file:', error);
+						console.log(
+							'File may need to be moved manually from download folder'
+						);
+					}
+				} else {
+					console.log('❌ Could not find or click OK button');
+				}
+			} catch (error) {
+				console.log('Export process failed:', error);
+			}
 		} else {
 			console.log(
 				'Database may not have opened properly, checking what happened...'
