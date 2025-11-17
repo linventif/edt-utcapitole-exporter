@@ -1,7 +1,7 @@
 import { serve } from 'bun';
 import { readdir, readFile } from 'fs/promises';
 import { join } from 'path';
-import { CALENDAR_MERGES } from './src/config';
+import { CALENDAR_MERGES, CALENDAR_PATHS } from './src/config';
 
 // Parse ICS file and extract events
 function parseICS(icsContent: string): string[] {
@@ -82,14 +82,43 @@ async function getLatestICS(calendarName: string): Promise<string | null> {
 	const exportDir = join(process.cwd(), 'export');
 
 	try {
-		// Get all date directories
+		// Strategy 1: Try direct calendar folder (export/CALENDAR_NAME/)
+		const directCalendarDir = join(exportDir, calendarName);
+		try {
+			const files = await readdir(directCalendarDir);
+			const icsFile = files.find((f) => f.endsWith('.ics'));
+			if (icsFile) {
+				return await readFile(
+					join(directCalendarDir, icsFile),
+					'utf-8'
+				);
+			}
+		} catch {
+			// Directory doesn't exist, try strategy 2
+		}
+
+		// Strategy 2: Look in date directories (export/DATE/CALENDAR_NAME/)
 		const dateDirs = await readdir(exportDir);
 
-		// Sort by date (newest first)
-		dateDirs.sort((a, b) => b.localeCompare(a));
+		// Filter out non-directory entries and sort by date (newest first)
+		const dateDirectories = [];
+		for (const dir of dateDirs) {
+			const fullPath = join(exportDir, dir);
+			try {
+				const stat = await Bun.file(fullPath).exists();
+				// Check if it looks like a date directory (contains hyphens)
+				if (dir.includes('-')) {
+					dateDirectories.push(dir);
+				}
+			} catch {
+				continue;
+			}
+		}
 
-		// Look for the calendar in the most recent date directory
-		for (const dateDir of dateDirs) {
+		dateDirectories.sort((a, b) => b.localeCompare(a));
+
+		// Look for the calendar in date directories
+		for (const dateDir of dateDirectories) {
 			const calendarDir = join(exportDir, dateDir, calendarName);
 			try {
 				const files = await readdir(calendarDir);
@@ -113,10 +142,76 @@ const server = serve({
 	async fetch(req) {
 		const url = new URL(req.url);
 
-		// Health check
+		// Root endpoint - show available calendars
 		if (url.pathname === '/') {
-			return new Response('Calendar Server Running', {
-				headers: { 'Content-Type': 'text/plain' },
+			const calendars = CALENDAR_PATHS.map((cp) => cp.name);
+			const merged = Object.keys(CALENDAR_MERGES);
+
+			const html = `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Calendar Server</title>
+	<style>
+		body { font-family: system-ui; max-width: 800px; margin: 40px auto; padding: 20px; }
+		h1 { color: #333; }
+		.calendar-list { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+		.calendar-item { margin: 10px 0; }
+		code { background: #e0e0e0; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; }
+		.info { background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; }
+	</style>
+</head>
+<body>
+	<h1>🗓️ Calendar Server</h1>
+
+	<div class="info">
+		<strong>Public URL:</strong> https://ics-cal-test-gpimp-2025-2026.linv.dev
+	</div>
+
+	<h2>📋 Available Calendars</h2>
+	<div class="calendar-list">
+		${calendars
+			.map(
+				(name) => `
+			<div class="calendar-item">
+				📅 <strong>${name}</strong><br>
+				<code>https://ics-cal-test-gpimp-2025-2026.linv.dev/calendar/${name}</code>
+			</div>
+		`
+			)
+			.join('')}
+	</div>
+
+	${
+		merged.length > 0
+			? `
+		<h2>🔗 Merged Calendars</h2>
+		<div class="calendar-list">
+			${merged
+				.map((name) => {
+					const sources = CALENDAR_MERGES[name];
+					return `
+				<div class="calendar-item">
+					🔀 <strong>${name}</strong> (merges: ${sources?.join(', ')})<br>
+					<code>https://ics-cal-test-gpimp-2025-2026.linv.dev/calendar/${name}</code>
+				</div>
+			`;
+				})
+				.join('')}
+		</div>
+	`
+			: ''
+	}
+
+	<div class="info">
+		<strong>How to use:</strong> Copy the URL above and paste it into Proton Calendar or Google Calendar's "Add calendar by URL" feature.
+	</div>
+</body>
+</html>
+			`;
+
+			return new Response(html, {
+				headers: { 'Content-Type': 'text/html; charset=utf-8' },
 			});
 		}
 
@@ -154,8 +249,9 @@ const server = serve({
 				return new Response(mergedICS, {
 					headers: {
 						'Content-Type': 'text/calendar; charset=utf-8',
-						'Content-Disposition': `attachment; filename="${calendarName}.ics"`,
 						'Cache-Control': 'no-cache, no-store, must-revalidate',
+						Pragma: 'no-cache',
+						Expires: '0',
 						'Access-Control-Allow-Origin': '*',
 					},
 				});
@@ -168,8 +264,9 @@ const server = serve({
 				return new Response(icsContent, {
 					headers: {
 						'Content-Type': 'text/calendar; charset=utf-8',
-						'Content-Disposition': `attachment; filename="${calendarName}.ics"`,
 						'Cache-Control': 'no-cache, no-store, must-revalidate',
+						Pragma: 'no-cache',
+						Expires: '0',
 						'Access-Control-Allow-Origin': '*',
 					},
 				});
@@ -183,20 +280,26 @@ const server = serve({
 });
 
 console.log(`🗓️  Calendar server running at http://localhost:${server.port}`);
-console.log('\nAvailable calendars:');
-console.log('  - http://localhost:6845/calendar/M1_MIAGE');
-console.log('  - http://localhost:6845/calendar/IMMFA1TD01');
+console.log('\n🌐 Public URL: https://ics-cal-test-gpimp-2025-2026.linv.dev');
+console.log('\n📋 Available calendars:');
+for (const calendar of CALENDAR_PATHS) {
+	console.log(
+		`  - https://ics-cal-test-gpimp-2025-2026.linv.dev/calendar/${calendar.name}`
+	);
+}
 
 // List merged calendars
 if (Object.keys(CALENDAR_MERGES).length > 0) {
-	console.log('\nMerged calendars:');
+	console.log('\n🔗 Merged calendars:');
 	for (const [name, sources] of Object.entries(CALENDAR_MERGES)) {
 		console.log(
-			`  - http://localhost:6845/calendar/${name} (merges: ${sources.join(
+			`  - https://ics-cal-test-gpimp-2025-2026.linv.dev/calendar/${name} (merges: ${sources.join(
 				', '
 			)})`
 		);
 	}
 }
 
-console.log('\nUse these URLs to subscribe in Google/Proton Calendar');
+console.log(
+	'\n💡 Tip: Visit https://ics-cal-test-gpimp-2025-2026.linv.dev in your browser to see all available calendars.'
+);
