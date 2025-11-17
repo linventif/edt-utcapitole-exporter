@@ -10,7 +10,7 @@ export const CALENDAR_PATHS: CalendarPath[] = [
 		path: [
 			'Trainees',
 			'UFR Informatique',
-			'M1 Miage',
+			'M1 MIAGE',
 			'IMMFA1TD',
 			'IMMFA1TD01',
 		],

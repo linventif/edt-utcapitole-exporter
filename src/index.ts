@@ -11,6 +11,64 @@ dotenv.config();
 
 const env = validateEnv(process.env);
 
+async function ensureLoggedIn(page: Page): Promise<void> {
+	// Check if we're still logged in by looking for the tree structure
+	const isLoggedIn = await page.evaluate(() => {
+		return document.querySelector('span.x-tree3-node-text') !== null;
+	});
+
+	if (!isLoggedIn) {
+		console.log('⚠️  Session expired, logging in again...');
+
+		// Check if we're on the login page or error page
+		const needsLogin = await page.evaluate(() => {
+			return (
+				document.querySelector('#userfield') !== null ||
+				document.querySelector('button.x-btn-text') !== null
+			);
+		});
+
+		if (needsLogin) {
+			// Click OK on error dialog if present
+			const okClicked = await page.evaluate(() => {
+				const buttons = Array.from(
+					document.querySelectorAll('button.x-btn-text')
+				);
+				const okButton = buttons.find(
+					(btn) => btn.textContent?.trim().toLowerCase() === 'ok'
+				);
+				if (okButton) {
+					(okButton as HTMLElement).click();
+					return true;
+				}
+				return false;
+			});
+
+			if (okClicked) {
+				console.log('Closed error dialog');
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+
+			// Re-login
+			await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
+			await selectDatabase(page, DATABASE_NAME);
+			console.log('✅ Re-authenticated successfully');
+		} else {
+			// Just reload to get back to login
+			await page.goto(
+				'https://ade-production.ut-capitole.fr/direct/myplanning.jsp',
+				{
+					waitUntil: 'networkidle2',
+					timeout: 60000,
+				}
+			);
+			await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
+			await selectDatabase(page, DATABASE_NAME);
+			console.log('✅ Re-authenticated successfully');
+		}
+	}
+}
+
 async function processCalendar(
 	page: Page,
 	calendarPath: { name: string; path: string[] }
@@ -29,12 +87,29 @@ async function processCalendar(
 	const dateInfo = await extractDateInfo(page);
 	console.log(`Date range: ${dateInfo.startDate} to ${dateInfo.endDate}`);
 
-	// Format filename
+	// Format filename and date directory
 	const filename = formatFilename(dateInfo, calendarPath.name);
 	console.log(`Target filename: ${filename}.ics`);
 
-	// Create export directory for this calendar
-	const exportDir = path.join(process.cwd(), 'export', calendarPath.name);
+	// Create ISO date string from the date range (YYYY-MM-DD_to_YYYY-MM-DD)
+	let dateDir = 'schedule';
+	if (dateInfo.startDate && dateInfo.endDate) {
+		const formatDate = (dateStr: string) => {
+			const [day, month, year] = dateStr.split('/');
+			return `${year}-${month}-${day}`;
+		};
+		const formattedStartDate = formatDate(dateInfo.startDate);
+		const formattedEndDate = formatDate(dateInfo.endDate);
+		dateDir = `${formattedStartDate}_to_${formattedEndDate}`;
+	}
+
+	// Create export directory: export/DATE_RANGE/CALENDAR_NAME/
+	const exportDir = path.join(
+		process.cwd(),
+		'export',
+		dateDir,
+		calendarPath.name
+	);
 
 	// Export the calendar
 	await exportCalendar(page, env.DOWNLOAD_PATH, exportDir, filename);
@@ -73,6 +148,9 @@ async function main() {
 		// Process each calendar path
 		for (const calendarPath of CALENDAR_PATHS) {
 			try {
+				// Ensure we're still logged in before processing
+				await ensureLoggedIn(page);
+
 				await processCalendar(page, calendarPath);
 
 				// Navigate back to the tree root if there are more calendars to process
