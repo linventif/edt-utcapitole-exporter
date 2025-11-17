@@ -15,7 +15,6 @@
 		"typescript": "^5.9.2"
 	},
 	"scripts": {
-		"dev": "bun run src/index.ts --watch",
-		"serve": "bun run serve-calendar.ts"
+		"dev": "bun run src/index.ts --watch"
 	}
 }

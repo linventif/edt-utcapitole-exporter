@@ -28,11 +28,3 @@ export const CALENDAR_PATHS: CalendarPath[] = [
 ];
 
 export const DATABASE_NAME = 'ADEPROD_2025-2026';
-
-// Calendar merge configuration for the server
-// Maps a virtual calendar name to an array of source calendars to merge
-export const CALENDAR_MERGES: Record<string, string[]> = {
-	GroupeIMP: ['IMMFA1TD01', 'IMMFA1CM01'],
-	// Add more merged calendars as needed:
-	// AllM1MIAGE: ['M1_MIAGE', 'IMMFA1TD01', 'IMMFA1CM01'],
-};

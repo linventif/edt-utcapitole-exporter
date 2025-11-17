@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ADE Calendar Exporter</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+					Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+				min-height: 100vh;
+				padding: 20px;
+			}
+
+			.container {
+				max-width: 900px;
+				margin: 40px auto;
+				background: white;
+				border-radius: 20px;
+				box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+				overflow: hidden;
+			}
+
+			header {
+				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+				color: white;
+				padding: 40px;
+				text-align: center;
+			}
+
+			header h1 {
+				font-size: 2.5em;
+				margin-bottom: 10px;
+			}
+
+			header p {
+				font-size: 1.1em;
+				opacity: 0.9;
+			}
+
+			.content {
+				padding: 40px;
+			}
+
+			.info-box {
+				background: #e3f2fd;
+				border-left: 4px solid #2196f3;
+				padding: 20px;
+				border-radius: 8px;
+				margin-bottom: 30px;
+			}
+
+			.info-box h3 {
+				color: #1976d2;
+				margin-bottom: 10px;
+			}
+
+			.calendar-section {
+				margin-bottom: 40px;
+			}
+
+			.calendar-section h2 {
+				color: #333;
+				margin-bottom: 20px;
+				padding-bottom: 10px;
+				border-bottom: 2px solid #667eea;
+			}
+
+			.calendar-list {
+				display: grid;
+				gap: 15px;
+			}
+
+			.calendar-item {
+				background: #f8f9fa;
+				border: 2px solid #e9ecef;
+				border-radius: 12px;
+				padding: 20px;
+				transition: all 0.3s ease;
+			}
+
+			.calendar-item:hover {
+				border-color: #667eea;
+				box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+				transform: translateY(-2px);
+			}
+
+			.calendar-name {
+				font-size: 1.3em;
+				font-weight: 600;
+				color: #333;
+				margin-bottom: 10px;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+			}
+
+			.calendar-name::before {
+				content: '📅';
+				font-size: 1.2em;
+			}
+
+			.calendar-url {
+				background: #fff;
+				border: 1px solid #dee2e6;
+				border-radius: 8px;
+				padding: 12px;
+				font-family: 'Courier New', monospace;
+				font-size: 0.9em;
+				color: #495057;
+				word-break: break-all;
+				margin-top: 10px;
+			}
+
+			.copy-btn {
+				background: #667eea;
+				color: white;
+				border: none;
+				padding: 8px 16px;
+				border-radius: 6px;
+				cursor: pointer;
+				font-size: 0.9em;
+				margin-top: 10px;
+				transition: background 0.3s ease;
+			}
+
+			.copy-btn:hover {
+				background: #5568d3;
+			}
+
+			.copy-btn:active {
+				transform: scale(0.98);
+			}
+
+			.instructions {
+				background: #fff3cd;
+				border-left: 4px solid #ffc107;
+				padding: 20px;
+				border-radius: 8px;
+				margin-top: 30px;
+			}
+
+			.instructions h3 {
+				color: #856404;
+				margin-bottom: 15px;
+			}
+
+			.instructions ol {
+				margin-left: 20px;
+				line-height: 1.8;
+			}
+
+			.instructions li {
+				margin-bottom: 10px;
+			}
+
+			footer {
+				text-align: center;
+				padding: 20px;
+				color: #6c757d;
+				font-size: 0.9em;
+			}
+
+			.status {
+				display: inline-block;
+				padding: 4px 12px;
+				background: #28a745;
+				color: white;
+				border-radius: 12px;
+				font-size: 0.85em;
+				margin-left: 10px;
+			}
+
+			@media (max-width: 768px) {
+				header h1 {
+					font-size: 1.8em;
+				}
+
+				.content {
+					padding: 20px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<header>
+				<h1>🗓️ ADE Calendar Exporter</h1>
+				<p>Abonnez-vous aux calendriers UT Capitole</p>
+			</header>
+
+			<div class="content">
+				<div class="info-box">
+					<h3>
+						📡 Service Status <span class="status">Running</span>
+					</h3>
+					<p>
+						Les calendriers sont automatiquement mis à jour toutes
+						les 6 heures.
+					</p>
+				</div>
+
+				<div class="calendar-section">
+					<h2>📋 Calendriers Disponibles</h2>
+					<div class="calendar-list" id="calendar-list">
+						<!-- Calendars will be loaded here -->
+					</div>
+				</div>
+
+				<div class="instructions">
+					<h3>📖 Comment s'abonner ?</h3>
+					<ol>
+						<li>
+							Cliquez sur "Copier l'URL" du calendrier souhaité
+						</li>
+						<li>
+							Dans <strong>Proton Calendar</strong> ou
+							<strong>Google Calendar</strong> :
+							<ul>
+								<li>Ouvrez les paramètres</li>
+								<li>
+									Cherchez "Ajouter un calendrier par URL" ou
+									"From URL"
+								</li>
+								<li>Collez l'URL copiée</li>
+							</ul>
+						</li>
+						<li>
+							Votre calendrier se synchronisera automatiquement !
+						</li>
+					</ol>
+				</div>
+			</div>
+
+			<footer>Made with ❤️ for UT Capitole students</footer>
+		</div>
+
+		<script>
+			const BASE_URL = 'https://ade.linv.dev';
+
+			async function loadCalendars() {
+				const calendarList = document.getElementById('calendar-list');
+
+				try {
+					const response = await fetch('/calendars/');
+
+					if (!response.ok) {
+						throw new Error('Failed to fetch calendars');
+					}
+
+					const data = await response.json();
+					const calendars = [];
+
+					// Parse nginx autoindex JSON format
+					data.forEach((item) => {
+						if (item.type === 'directory' && item.name !== '..') {
+							calendars.push(item.name);
+						}
+					});
+
+					if (calendars.length === 0) {
+						calendars.push('IMMFA1TD01', 'IMMFA1CM01');
+					}
+
+					renderCalendars(calendars);
+				} catch (error) {
+					console.error('Error loading calendars:', error);
+					renderCalendars(['IMMFA1TD01', 'IMMFA1CM01']);
+				}
+			}
+
+			function renderCalendars(calendars) {
+				const calendarList = document.getElementById('calendar-list');
+				calendarList.innerHTML = '';
+
+				calendars.forEach((calendarName) => {
+					const url = `${BASE_URL}/calendars/${calendarName}/${calendarName}.ics`;
+
+					const item = document.createElement('div');
+					item.className = 'calendar-item';
+					item.innerHTML = `
+                    <div class="calendar-name">${calendarName}</div>
+                    <div class="calendar-url" id="url-${calendarName}">${url}</div>
+                    <button class="copy-btn" onclick="copyToClipboard('url-${calendarName}')">
+                        📋 Copier l'URL
+                    </button>
+                `;
+
+					calendarList.appendChild(item);
+				});
+			}
+
+			function copyToClipboard(elementId) {
+				const element = document.getElementById(elementId);
+				const text = element.textContent;
+
+				navigator.clipboard
+					.writeText(text)
+					.then(() => {
+						const btn = event.target;
+						const originalText = btn.textContent;
+						btn.textContent = '✅ Copié !';
+						btn.style.background = '#28a745';
+
+						setTimeout(() => {
+							btn.textContent = originalText;
+							btn.style.background = '#667eea';
+						}, 2000);
+					})
+					.catch((err) => {
+						console.error('Error copying:', err);
+						alert(
+							'Erreur lors de la copie. Veuillez copier manuellement.'
+						);
+					});
+			}
+
+			loadCalendars();
+		</script>
+	</body>
+</html>

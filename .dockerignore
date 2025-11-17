@@ -1,0 +1,10 @@
+node_modules
+.git
+.env.example
+export
+*.md
+.gitignore
+docker-compose.yml
+Dockerfile
+nginx
+serve-calendar.ts

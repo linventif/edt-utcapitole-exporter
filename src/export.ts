@@ -36,17 +36,8 @@ export function formatFilename(
 	dateInfo: DateInfo,
 	calendarName: string
 ): string {
-	if (dateInfo.startDate && dateInfo.endDate) {
-		const formatDate = (dateStr: string) => {
-			const [day, month, year] = dateStr.split('/');
-			return `${year}-${month}-${day}`;
-		};
-
-		const formattedStartDate = formatDate(dateInfo.startDate);
-		const formattedEndDate = formatDate(dateInfo.endDate);
-		return `${calendarName}_${formattedStartDate}_to_${formattedEndDate}`;
-	}
-	return `${calendarName}_schedule`;
+	// Just return the calendar name without date suffix
+	return calendarName;
 }
 
 export async function exportCalendar(

@@ -1,0 +1,26 @@
+services:
+  exporter:
+    build: .
+    container_name: ade-exporter
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+    env_file:
+      - .env
+    volumes:
+      - ./export:/app/export
+    # Run export every 6 hours
+    command: sh -c "while true; do bun run src/index.ts && sleep 21600; done"
+
+  nginx:
+    image: nginx:alpine
+    container_name: ade-nginx
+    restart: unless-stopped
+    ports:
+      - "6845:80"
+    volumes:
+      - ./export:/usr/share/nginx/html/calendars:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/index.html:/usr/share/nginx/html/index.html:ro
+    depends_on:
+      - exporter
