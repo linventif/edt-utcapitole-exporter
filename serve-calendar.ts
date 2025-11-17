@@ -27,6 +27,32 @@ function parseICS(icsContent: string): string[] {
 	return events;
 }
 
+// Clean and normalize ICS content for calendar clients
+function normalizeICS(icsContent: string, calendarName?: string): string {
+	// Replace METHOD:REQUEST with METHOD:PUBLISH (required for subscriptions)
+	let normalized = icsContent.replace(/METHOD:REQUEST/g, 'METHOD:PUBLISH');
+
+	// Add X-WR-CALNAME if not present
+	if (!normalized.includes('X-WR-CALNAME:')) {
+		const calName = calendarName || 'Calendar';
+		normalized = normalized.replace(
+			/VERSION:2\.0/,
+			`VERSION:2.0\nX-WR-CALNAME:${calName}\nX-WR-TIMEZONE:Europe/Paris`
+		);
+	} else if (calendarName) {
+		// Update existing calendar name
+		normalized = normalized.replace(
+			/(X-WR-CALNAME:).*/,
+			`$1${calendarName}`
+		);
+	}
+
+	// Ensure proper line endings (CRLF as per RFC 5545)
+	normalized = normalized.replace(/\r?\n/g, '\r\n');
+
+	return normalized;
+}
+
 // Merge multiple ICS files into one
 function mergeICS(icsFiles: string[], mergedName: string): string {
 	const allEvents: string[] = [];
@@ -62,19 +88,12 @@ function mergeICS(icsFiles: string[], mergedName: string): string {
 		}
 	}
 
-	// Update calendar name in header
-	const updatedHeader = header.replace(
-		/(X-WR-CALNAME:).*/,
-		`$1${mergedName}`
-	);
-
 	// Combine everything
-	return (
-		updatedHeader +
-		Array.from(uniqueEvents.values()).join('\n') +
-		'\n' +
-		footer
-	);
+	const merged =
+		header + Array.from(uniqueEvents.values()).join('\n') + '\n' + footer;
+
+	// Normalize the merged ICS
+	return normalizeICS(merged, mergedName);
 }
 
 // Get the most recent ICS file for a given calendar name
@@ -261,7 +280,10 @@ const server = serve({
 			const icsContent = await getLatestICS(calendarName);
 
 			if (icsContent) {
-				return new Response(icsContent, {
+				// Normalize the ICS content
+				const normalized = normalizeICS(icsContent, calendarName);
+
+				return new Response(normalized, {
 					headers: {
 						'Content-Type': 'text/calendar; charset=utf-8',
 						'Cache-Control': 'no-cache, no-store, must-revalidate',
