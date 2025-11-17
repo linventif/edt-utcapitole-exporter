@@ -104,12 +104,7 @@ async function processCalendar(
 	}
 
 	// Create export directory: export/DATE_RANGE/CALENDAR_NAME/
-	const exportDir = path.join(
-		process.cwd(),
-		'export',
-		dateDir,
-		calendarPath.name
-	);
+	const exportDir = path.join(process.cwd(), 'export', calendarPath.name);
 
 	// Export the calendar
 	await exportCalendar(page, env.DOWNLOAD_PATH, exportDir, filename);
