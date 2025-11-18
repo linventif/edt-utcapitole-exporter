@@ -24,18 +24,38 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 		console.log('⚠️  Session expired, logging in again...');
 
 		try {
-			// Get current URL to see where we are
-			const currentUrl = page.url();
-			console.log('Current URL:', currentUrl);
+			// Navigate directly to myplanning.jsp - if session is valid, it will show the tree
+			// If session expired, it will redirect to login
+			console.log('Attempting to access planning page...');
+			await page.goto(
+				'https://ade-production.ut-capitole.fr/direct/myplanning.jsp',
+				{
+					waitUntil: 'networkidle2',
+					timeout: 60000,
+				}
+			);
 
-			// Check if we need to navigate to login page
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+
+			// Check if we got to the planning page or need to login
+			const hasTree = await page.evaluate(() => {
+				return (
+					document.querySelector('span.x-tree3-node-text') !== null
+				);
+			});
+
+			if (hasTree) {
+				console.log('✅ Session still valid, back to planning page');
+				return;
+			}
+
+			// We need to login - check if login form is present or we need to navigate
 			const hasLoginForm = await page.evaluate(() => {
 				return document.querySelector('#userfield') !== null;
 			});
 
 			if (!hasLoginForm) {
-				// Navigate to login page
-				console.log('Navigating to login page...');
+				console.log('No login form, navigating to login page...');
 				await page.goto(
 					'https://ade-production.ut-capitole.fr/direct/index.jsp',
 					{
@@ -43,37 +63,48 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 						timeout: 60000,
 					}
 				);
-
-				// Wait a bit for page to stabilize
 				await new Promise((resolve) => setTimeout(resolve, 2000));
-
-				// Check if there's an error dialog to dismiss
-				const okClicked = await page.evaluate(() => {
-					const buttons = Array.from(
-						document.querySelectorAll('button.x-btn-text')
-					);
-					const okButton = buttons.find(
-						(btn) => btn.textContent?.trim().toLowerCase() === 'ok'
-					);
-					if (okButton) {
-						(okButton as HTMLElement).click();
-						return true;
-					}
-					return false;
-				});
-
-				if (okClicked) {
-					console.log('Dismissed error dialog');
-					await new Promise((resolve) => setTimeout(resolve, 2000));
-				}
 			}
 
-			// Now we should be on the login page, fill in credentials directly
+			// Dismiss any error dialogs
+			const okClicked = await page.evaluate(() => {
+				const buttons = Array.from(
+					document.querySelectorAll('button.x-btn-text')
+				);
+				const okButton = buttons.find(
+					(btn) => btn.textContent?.trim().toLowerCase() === 'ok'
+				);
+				if (okButton) {
+					(okButton as HTMLElement).click();
+					return true;
+				}
+				return false;
+			});
+
+			if (okClicked) {
+				console.log('Dismissed error dialog');
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+
+			// Fill in login credentials
 			console.log('Filling in login credentials...');
 			await page.waitForSelector('#userfield', {
 				visible: true,
 				timeout: 10000,
 			});
+
+			// Clear any existing input first
+			await page.evaluate(() => {
+				const userField = document.querySelector(
+					'#userfield'
+				) as HTMLInputElement;
+				const passField = document.querySelector(
+					'#passwordfield'
+				) as HTMLInputElement;
+				if (userField) userField.value = '';
+				if (passField) passField.value = '';
+			});
+
 			await page.type('#userfield', env.AUTH_USERNAME);
 
 			await page.waitForSelector('#passwordfield', { visible: true });
@@ -243,25 +274,11 @@ async function main() {
 				await processCalendar(page, calendarPath, downloadPath);
 				results.successful.push(calendarPath.name);
 
-				// Reload page for next calendar (except for the last one)
+				// No need to reload - the tree is still there for the next calendar
+				// Just wait a moment between calendars
 				if (i < CALENDAR_PATHS.length - 1) {
 					console.log('Preparing for next calendar...');
-					try {
-						// Just reload the current page instead of navigating to a specific URL
-						await page.reload({
-							waitUntil: 'networkidle2',
-							timeout: 60000,
-						});
-						await new Promise((resolve) =>
-							setTimeout(resolve, 3000)
-						);
-					} catch (navError) {
-						console.error(
-							'Page reload error, will re-authenticate:',
-							navError
-						);
-						// ensureLoggedIn will handle re-authentication on next iteration
-					}
+					await new Promise((resolve) => setTimeout(resolve, 2000));
 				}
 			} catch (error) {
 				const errorMessage =
