@@ -116,9 +116,18 @@ async function main() {
 	console.log('Starting browser...');
 
 	const browser = await puppeteer.launch({
-		headless: false,
-		defaultViewport: null,
-		args: ['--start-maximized'],
+		headless: env.DEBUG_MODE ? false : true,
+		defaultViewport: env.DEBUG_MODE ? null : { width: 1920, height: 1080 },
+		args: env.DEBUG_MODE
+			? ['--start-maximized']
+			: [
+					'--start-maximized',
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--window-size=1920,1080',
+			  ],
 		executablePath: env.CHROMIUM_PATH,
 	});
 

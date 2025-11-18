@@ -12,9 +12,14 @@ RUN apk add --no-cache \
 
 # Set Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    CHROMIUM_PATH=/usr/bin/chromium-browser \
+    DOWNLOAD_PATH=/app/downloads
 
 WORKDIR /app
+
+# Create necessary directories
+RUN mkdir -p /app/export /app/downloads
 
 # Copy package files
 COPY package.json bun.lockb* ./
@@ -25,9 +30,6 @@ RUN bun install --frozen-lockfile
 # Copy source code
 COPY src ./src
 COPY tsconfig.json ./
-
-# Create export directory
-RUN mkdir -p /app/export
 
 # Run the export script
 CMD ["bun", "run", "src/index.ts"]

@@ -252,7 +252,24 @@ export async function navigateTreePath(
 
 				// Wait for expansion to complete
 				console.log('Waiting for child nodes to load...');
-				await new Promise((resolve) => setTimeout(resolve, 3000));
+				await new Promise((resolve) => setTimeout(resolve, 5000));
+
+				// Additional wait for DOM stability in headless mode
+				await page
+					.waitForFunction(
+						() => {
+							const loading =
+								document.querySelector('.x-mask-loading');
+							return !loading;
+						},
+						{ timeout: 3000 }
+					)
+					.catch(() => {
+						// Ignore - loading mask might not appear
+					});
+
+				// Extra stability wait
+				await new Promise((resolve) => setTimeout(resolve, 2000));
 
 				// Debug: List nodes after expansion
 				const nodesAfterExpand = await page.evaluate(() => {
