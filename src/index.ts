@@ -24,41 +24,69 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 		console.log('⚠️  Session expired, logging in again...');
 
 		try {
-			// Navigate to login page
-			console.log('Navigating to login page...');
-			await page.goto(
-				'https://ade-production.ut-capitole.fr/direct/index.jsp',
-				{
-					waitUntil: 'networkidle2',
-					timeout: 60000,
-				}
-			);
+			// Get current URL to see where we are
+			const currentUrl = page.url();
+			console.log('Current URL:', currentUrl);
 
-			// Wait a bit for page to stabilize
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-
-			// Check if there's an error dialog to dismiss
-			const okClicked = await page.evaluate(() => {
-				const buttons = Array.from(
-					document.querySelectorAll('button.x-btn-text')
-				);
-				const okButton = buttons.find(
-					(btn) => btn.textContent?.trim().toLowerCase() === 'ok'
-				);
-				if (okButton) {
-					(okButton as HTMLElement).click();
-					return true;
-				}
-				return false;
+			// Check if we need to navigate to login page
+			const hasLoginForm = await page.evaluate(() => {
+				return document.querySelector('#userfield') !== null;
 			});
 
-			if (okClicked) {
-				console.log('Dismissed error dialog');
+			if (!hasLoginForm) {
+				// Navigate to login page
+				console.log('Navigating to login page...');
+				await page.goto(
+					'https://ade-production.ut-capitole.fr/direct/index.jsp',
+					{
+						waitUntil: 'networkidle2',
+						timeout: 60000,
+					}
+				);
+
+				// Wait a bit for page to stabilize
 				await new Promise((resolve) => setTimeout(resolve, 2000));
+
+				// Check if there's an error dialog to dismiss
+				const okClicked = await page.evaluate(() => {
+					const buttons = Array.from(
+						document.querySelectorAll('button.x-btn-text')
+					);
+					const okButton = buttons.find(
+						(btn) => btn.textContent?.trim().toLowerCase() === 'ok'
+					);
+					if (okButton) {
+						(okButton as HTMLElement).click();
+						return true;
+					}
+					return false;
+				});
+
+				if (okClicked) {
+					console.log('Dismissed error dialog');
+					await new Promise((resolve) => setTimeout(resolve, 2000));
+				}
 			}
 
-			// Perform login
-			await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
+			// Now we should be on the login page, fill in credentials directly
+			console.log('Filling in login credentials...');
+			await page.waitForSelector('#userfield', {
+				visible: true,
+				timeout: 10000,
+			});
+			await page.type('#userfield', env.AUTH_USERNAME);
+
+			await page.waitForSelector('#passwordfield', { visible: true });
+			await page.type('#passwordfield', env.AUTH_PASSWORD);
+
+			await page.waitForSelector('button.btn.btn-success', {
+				visible: true,
+			});
+			await page.click('button.btn.btn-success');
+
+			console.log('Login submitted.');
+
+			// Select database
 			await selectDatabase(page, DATABASE_NAME);
 
 			// Wait for tree to be ready
@@ -219,19 +247,17 @@ async function main() {
 				if (i < CALENDAR_PATHS.length - 1) {
 					console.log('Preparing for next calendar...');
 					try {
-						await page.goto(
-							'https://ade-production.ut-capitole.fr/direct/myplanning.jsp',
-							{
-								waitUntil: 'networkidle2',
-								timeout: 60000,
-							}
-						);
+						// Just reload the current page instead of navigating to a specific URL
+						await page.reload({
+							waitUntil: 'networkidle2',
+							timeout: 60000,
+						});
 						await new Promise((resolve) =>
 							setTimeout(resolve, 3000)
 						);
 					} catch (navError) {
 						console.error(
-							'Navigation error, will re-authenticate:',
+							'Page reload error, will re-authenticate:',
 							navError
 						);
 						// ensureLoggedIn will handle re-authentication on next iteration
