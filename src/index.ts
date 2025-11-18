@@ -114,11 +114,17 @@ async function processCalendar(
 
 async function main() {
 	console.log('Starting browser...');
+	console.log('DEBUG_MODE env value:', env.DEBUG_MODE);
+	console.log('DEBUG_MODE type:', typeof env.DEBUG_MODE);
+
+	const isDebugMode = env.DEBUG_MODE === true;
+	console.log('isDebugMode:', isDebugMode);
+	console.log('headless:', !isDebugMode);
 
 	const browser = await puppeteer.launch({
-		headless: env.DEBUG_MODE ? false : true,
-		defaultViewport: env.DEBUG_MODE ? null : { width: 1920, height: 1080 },
-		args: env.DEBUG_MODE
+		headless: !isDebugMode,
+		defaultViewport: isDebugMode ? null : { width: 1920, height: 1080 },
+		args: isDebugMode
 			? ['--start-maximized']
 			: [
 					'--start-maximized',

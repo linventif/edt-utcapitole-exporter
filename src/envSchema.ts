@@ -12,9 +12,8 @@ export const envSchema = z.object({
 	DOWNLOAD_PATH: z.string().default('/app/downloads'),
 	DEBUG_MODE: z
 		.string()
-		.optional()
-		.transform((val) => val === 'true')
-		.default(() => false),
+		.default('false')
+		.transform((val) => val === 'true'),
 });
 
 // Validate the environment variables

@@ -233,6 +233,63 @@ export async function navigateTreePath(
 
 					if (expanded) {
 						console.log(`✓ Successfully expanded "${nodeName}"`);
+
+						// Wait for child nodes to load
+						console.log('Waiting for child nodes to load...');
+						await new Promise((resolve) =>
+							setTimeout(resolve, 3000)
+						);
+
+						// Force a scroll to trigger DOM updates (important for headless)
+						await page.evaluate((cellId) => {
+							const cell = document.getElementById(cellId);
+							if (cell) {
+								cell.scrollIntoView({
+									behavior: 'auto',
+									block: 'center',
+								});
+							}
+						}, nodeFound.cellId);
+
+						await new Promise((resolve) =>
+							setTimeout(resolve, 1000)
+						);
+
+						// Click the row to ensure it's selected and children are loaded
+						await page.evaluate((cellId) => {
+							const cell = document.getElementById(cellId);
+							if (cell) {
+								const row = cell.closest('.x-grid3-row');
+								if (row) {
+									(row as HTMLElement).click();
+								}
+							}
+						}, nodeFound.cellId);
+
+						// Additional wait for DOM stability in headless mode
+						await new Promise((resolve) =>
+							setTimeout(resolve, 3000)
+						);
+
+						await page
+							.waitForFunction(
+								() => {
+									const loading =
+										document.querySelector(
+											'.x-mask-loading'
+										);
+									return !loading;
+								},
+								{ timeout: 3000 }
+							)
+							.catch(() => {
+								// Ignore - loading mask might not appear
+							});
+
+						// Extra stability wait
+						await new Promise((resolve) =>
+							setTimeout(resolve, 2000)
+						);
 					} else {
 						console.log(
 							`No joint found, clicking cell directly for "${nodeName}"`
