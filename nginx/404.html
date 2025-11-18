@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>404 - Calendrier non trouvé</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI',
+					Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+				background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+				min-height: 100vh;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 20px;
+			}
+
+			.container {
+				max-width: 600px;
+				background: white;
+				border-radius: 20px;
+				box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+				padding: 60px 40px;
+				text-align: center;
+			}
+
+			.error-code {
+				font-size: 120px;
+				font-weight: bold;
+				color: #667eea;
+				margin-bottom: 20px;
+				line-height: 1;
+			}
+
+			h1 {
+				font-size: 2em;
+				color: #333;
+				margin-bottom: 20px;
+			}
+
+			p {
+				color: #6c757d;
+				font-size: 1.1em;
+				line-height: 1.6;
+				margin-bottom: 30px;
+			}
+
+			.info-box {
+				background: #fff3cd;
+				border-left: 4px solid #ffc107;
+				padding: 20px;
+				border-radius: 8px;
+				margin: 30px 0;
+				text-align: left;
+			}
+
+			.info-box h3 {
+				color: #856404;
+				margin-bottom: 10px;
+			}
+
+			.info-box p {
+				color: #856404;
+				font-size: 0.95em;
+			}
+
+			.btn {
+				display: inline-block;
+				background: #667eea;
+				color: white;
+				padding: 12px 30px;
+				border-radius: 8px;
+				text-decoration: none;
+				font-weight: 600;
+				transition: background 0.3s ease;
+			}
+
+			.btn:hover {
+				background: #5568d3;
+			}
+
+			.emoji {
+				font-size: 80px;
+				margin-bottom: 20px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="emoji">📅❌</div>
+			<div class="error-code">404</div>
+			<h1>Calendrier non trouvé</h1>
+			<p>
+				Le calendrier que vous recherchez n'a pas encore été généré ou
+				n'existe pas.
+			</p>
+
+			<div class="info-box">
+				<h3>⏳ Calendrier en cours de génération ?</h3>
+				<p>
+					Les calendriers sont générés toutes les 6 heures. Si vous
+					venez de configurer ce service, veuillez attendre quelques
+					minutes que la première génération se termine.
+				</p>
+			</div>
+
+			<a href="/" class="btn">← Retour à l'accueil</a>
+		</div>
+	</body>
+</html>
