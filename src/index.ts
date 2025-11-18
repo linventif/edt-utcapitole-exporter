@@ -13,6 +13,8 @@ dotenv.config();
 const env = validateEnv(process.env);
 
 async function ensureLoggedIn(page: Page): Promise<void> {
+	console.log('Checking authentication status...');
+
 	// Check if we're still logged in by looking for the tree structure
 	const isLoggedIn = await page.evaluate(() => {
 		return document.querySelector('span.x-tree3-node-text') !== null;
@@ -21,16 +23,21 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 	if (!isLoggedIn) {
 		console.log('⚠️  Session expired, logging in again...');
 
-		// Check if we're on the login page or error page
-		const needsLogin = await page.evaluate(() => {
-			return (
-				document.querySelector('#userfield') !== null ||
-				document.querySelector('button.x-btn-text') !== null
+		try {
+			// Navigate to login page
+			console.log('Navigating to login page...');
+			await page.goto(
+				'https://ade-production.ut-capitole.fr/direct/index.jsp',
+				{
+					waitUntil: 'networkidle2',
+					timeout: 60000,
+				}
 			);
-		});
 
-		if (needsLogin) {
-			// Click OK on error dialog if present
+			// Wait a bit for page to stabilize
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+
+			// Check if there's an error dialog to dismiss
 			const okClicked = await page.evaluate(() => {
 				const buttons = Array.from(
 					document.querySelectorAll('button.x-btn-text')
@@ -46,27 +53,30 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 			});
 
 			if (okClicked) {
-				console.log('Closed error dialog');
+				console.log('Dismissed error dialog');
 				await new Promise((resolve) => setTimeout(resolve, 2000));
 			}
 
-			// Re-login
+			// Perform login
 			await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
 			await selectDatabase(page, DATABASE_NAME);
+
+			// Wait for tree to be ready
+			await page.waitForSelector('span.x-tree3-node-text', {
+				visible: true,
+				timeout: 30000,
+			});
+
 			console.log('✅ Re-authenticated successfully');
-		} else {
-			// Just reload to get back to login
-			await page.goto(
-				'https://ade-production.ut-capitole.fr/direct/myplanning.jsp',
-				{
-					waitUntil: 'networkidle2',
-					timeout: 60000,
-				}
+		} catch (error) {
+			console.error('❌ Re-authentication failed:', error);
+			throw new Error(
+				'Failed to re-authenticate: ' +
+					(error instanceof Error ? error.message : String(error))
 			);
-			await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
-			await selectDatabase(page, DATABASE_NAME);
-			console.log('✅ Re-authenticated successfully');
 		}
+	} else {
+		console.log('✓ Already logged in');
 	}
 }
 
@@ -79,39 +89,49 @@ async function processCalendar(
 	console.log(`Processing calendar: ${calendarPath.name}`);
 	console.log(`${'='.repeat(60)}\n`);
 
-	// Navigate to the calendar path
-	await navigateTreePath(page, calendarPath.path);
+	try {
+		// Navigate to the calendar path
+		await navigateTreePath(page, calendarPath.path);
 
-	// Wait for schedule to load
-	await new Promise((resolve) => setTimeout(resolve, 3000));
+		// Wait for schedule to load
+		await new Promise((resolve) => setTimeout(resolve, 3000));
 
-	// Extract date information
-	const dateInfo = await extractDateInfo(page);
-	console.log(`Date range: ${dateInfo.startDate} to ${dateInfo.endDate}`);
+		// Extract date information
+		const dateInfo = await extractDateInfo(page);
+		console.log(`Date range: ${dateInfo.startDate} to ${dateInfo.endDate}`);
 
-	// Format filename and date directory
-	const filename = formatFilename(dateInfo, calendarPath.name);
-	console.log(`Target filename: ${filename}.ics`);
+		// Format filename and date directory
+		const filename = formatFilename(dateInfo, calendarPath.name);
+		console.log(`Target filename: ${filename}.ics`);
 
-	// Create ISO date string from the date range (YYYY-MM-DD_to_YYYY-MM-DD)
-	let dateDir = 'schedule';
-	if (dateInfo.startDate && dateInfo.endDate) {
-		const formatDate = (dateStr: string) => {
-			const [day, month, year] = dateStr.split('/');
-			return `${year}-${month}-${day}`;
-		};
-		const formattedStartDate = formatDate(dateInfo.startDate);
-		const formattedEndDate = formatDate(dateInfo.endDate);
-		dateDir = `${formattedStartDate}_to_${formattedEndDate}`;
+		// Create ISO date string from the date range (YYYY-MM-DD_to_YYYY-MM-DD)
+		let dateDir = 'schedule';
+		if (dateInfo.startDate && dateInfo.endDate) {
+			const formatDate = (dateStr: string) => {
+				const [day, month, year] = dateStr.split('/');
+				return `${year}-${month}-${day}`;
+			};
+			const formattedStartDate = formatDate(dateInfo.startDate);
+			const formattedEndDate = formatDate(dateInfo.endDate);
+			dateDir = `${formattedStartDate}_to_${formattedEndDate}`;
+		}
+
+		// Create export directory: export/DATE_RANGE/CALENDAR_NAME/
+		const exportDir = path.join(process.cwd(), 'export', calendarPath.name);
+
+		// Export the calendar
+		await exportCalendar(page, downloadPath, exportDir, filename);
+
+		console.log(
+			`\n✅ Successfully exported calendar: ${calendarPath.name}\n`
+		);
+	} catch (error) {
+		console.error(
+			`❌ Error processing calendar ${calendarPath.name}:`,
+			error
+		);
+		throw error; // Re-throw to be caught by main
 	}
-
-	// Create export directory: export/DATE_RANGE/CALENDAR_NAME/
-	const exportDir = path.join(process.cwd(), 'export', calendarPath.name);
-
-	// Export the calendar
-	await exportCalendar(page, downloadPath, exportDir, filename);
-
-	console.log(`\n✅ Successfully exported calendar: ${calendarPath.name}\n`);
 }
 
 async function main() {
@@ -171,53 +191,118 @@ async function main() {
 			}
 		});
 
-		// Login and select database
+		// Initial login
+		console.log('Performing initial login...');
 		await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
 		await selectDatabase(page, DATABASE_NAME);
 
-		// Process each calendar path
-		for (const calendarPath of CALENDAR_PATHS) {
+		// Track successful and failed exports
+		const results = {
+			successful: [] as string[],
+			failed: [] as Array<{ name: string; error: string }>,
+		};
+
+		// Process each calendar
+		for (let i = 0; i < CALENDAR_PATHS.length; i++) {
+			const calendarPath = CALENDAR_PATHS[i];
+			if (!calendarPath) continue;
+
 			try {
-				// Ensure we're still logged in before processing
+				// Ensure we're logged in before processing
 				await ensureLoggedIn(page);
 
+				// Process the calendar
 				await processCalendar(page, calendarPath, downloadPath);
+				results.successful.push(calendarPath.name);
 
-				// Navigate back to the tree root if there are more calendars to process
-				if (
-					CALENDAR_PATHS.indexOf(calendarPath) <
-					CALENDAR_PATHS.length - 1
-				) {
-					console.log('Refreshing page for next calendar...');
-					await page.reload({ waitUntil: 'networkidle2' });
-					await new Promise((resolve) => setTimeout(resolve, 3000));
+				// Reload page for next calendar (except for the last one)
+				if (i < CALENDAR_PATHS.length - 1) {
+					console.log('Preparing for next calendar...');
+					try {
+						await page.goto(
+							'https://ade-production.ut-capitole.fr/direct/myplanning.jsp',
+							{
+								waitUntil: 'networkidle2',
+								timeout: 60000,
+							}
+						);
+						await new Promise((resolve) =>
+							setTimeout(resolve, 3000)
+						);
+					} catch (navError) {
+						console.error(
+							'Navigation error, will re-authenticate:',
+							navError
+						);
+						// ensureLoggedIn will handle re-authentication on next iteration
+					}
 				}
 			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
 				console.error(
-					`Failed to process calendar ${calendarPath.name}:`,
-					error
+					`\n❌ Failed to process calendar ${calendarPath.name}:`
 				);
-				// Continue with next calendar
+				console.error(errorMessage);
+				results.failed.push({
+					name: calendarPath.name,
+					error: errorMessage,
+				});
+
+				// Try to recover for next calendar
+				if (i < CALENDAR_PATHS.length - 1) {
+					console.log('Attempting to recover for next calendar...');
+					try {
+						await page.goto(
+							'https://ade-production.ut-capitole.fr/direct/index.jsp',
+							{
+								waitUntil: 'networkidle2',
+								timeout: 60000,
+							}
+						);
+						await new Promise((resolve) =>
+							setTimeout(resolve, 2000)
+						);
+					} catch (recoveryError) {
+						console.error('Recovery failed:', recoveryError);
+					}
+				}
 			}
 		}
 
+		// Print summary
 		console.log('\n' + '='.repeat(60));
-		console.log('All calendars processed successfully!');
+		console.log('EXPORT SUMMARY');
+		console.log('='.repeat(60));
+		console.log(`✅ Successful: ${results.successful.length}`);
+		results.successful.forEach((name) => {
+			console.log(`   - ${name}`);
+		});
+
+		if (results.failed.length > 0) {
+			console.log(`\n❌ Failed: ${results.failed.length}`);
+			results.failed.forEach(({ name, error }) => {
+				console.log(`   - ${name}: ${error}`);
+			});
+		}
 		console.log('='.repeat(60) + '\n');
 
-		// Keep browser open briefly to see results
-		console.log('Keeping browser open for 30 seconds...');
-		await new Promise((resolve) => setTimeout(resolve, 30000));
+		// Keep browser open briefly in debug mode
+		if (isDebugMode) {
+			console.log('Debug mode: keeping browser open for 30 seconds...');
+			await new Promise((resolve) => setTimeout(resolve, 30000));
+		}
 	} catch (error) {
-		console.error('An error occurred:', error);
+		console.error('❌ Critical error in main:', error);
+		throw error;
 	} finally {
 		console.log('Closing browser...');
 		await browser.close();
-		console.log('Program ended gracefully.');
+		console.log('Program ended.');
 	}
 }
 
 main().catch((error) => {
-	console.error('Unhandled error:', error);
+	console.error('❌ Unhandled error:', error);
 	process.exit(1);
 });
