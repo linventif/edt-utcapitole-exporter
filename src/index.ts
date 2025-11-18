@@ -139,6 +139,32 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 	}
 }
 
+async function resetTreeView(page: Page): Promise<void> {
+	console.log('Resetting tree view...');
+
+	try {
+		// Reload the page to reset tree state
+		await page.reload({
+			waitUntil: 'networkidle2',
+			timeout: 60000,
+		});
+
+		// Wait for tree to be ready again
+		await page.waitForSelector('span.x-tree3-node-text', {
+			visible: true,
+			timeout: 30000,
+		});
+
+		console.log('✓ Tree view reset successfully');
+
+		// Give it a moment to stabilize
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+	} catch (error) {
+		console.error('Failed to reset tree view:', error);
+		throw error;
+	}
+}
+
 async function processCalendar(
 	page: Page,
 	calendarPath: { name: string; path: string[] },
@@ -274,11 +300,12 @@ async function main() {
 				await processCalendar(page, calendarPath, downloadPath);
 				results.successful.push(calendarPath.name);
 
-				// No need to reload - the tree is still there for the next calendar
-				// Just wait a moment between calendars
+				// Reset tree view for next calendar (except for the last one)
 				if (i < CALENDAR_PATHS.length - 1) {
 					console.log('Preparing for next calendar...');
-					await new Promise((resolve) => setTimeout(resolve, 2000));
+					await resetTreeView(page);
+					// Check if still logged in after reload
+					await ensureLoggedIn(page);
 				}
 			} catch (error) {
 				const errorMessage =
