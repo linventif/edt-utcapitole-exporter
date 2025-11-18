@@ -168,6 +168,18 @@
 				font-size: 0.9em;
 			}
 
+			footer a {
+				color: #28a745;
+				text-decoration: none;
+				font-weight: 600;
+				transition: color 0.3s ease;
+			}
+
+			footer a:hover {
+				color: #1e7e34;
+				text-decoration: underline;
+			}
+
 			.status {
 				display: inline-block;
 				padding: 4px 12px;
@@ -239,7 +251,22 @@
 				</div>
 			</div>
 
-			<footer>Made with ❤️ for UT Capitole students</footer>
+			<footer>
+				Made with ❤️ by
+				<a
+					href="https://gregoire-becue.me"
+					target="_blank"
+					rel="noopener noreferrer"
+					>Grégoire Becue</a
+				>
+				aka
+				<a
+					href="https://github.com/linventif"
+					target="_blank"
+					rel="noopener noreferrer"
+					>linventif</a
+				>
+			</footer>
 		</div>
 
 		<script>
@@ -300,26 +327,60 @@
 			function copyToClipboard(elementId) {
 				const element = document.getElementById(elementId);
 				const text = element.textContent;
+				const btn = event.target;
+				const originalText = btn.textContent;
 
-				navigator.clipboard
-					.writeText(text)
-					.then(() => {
-						const btn = event.target;
-						const originalText = btn.textContent;
-						btn.textContent = '✅ Copié !';
-						btn.style.background = '#28a745';
+				// Fonction de succès
+				const onSuccess = () => {
+					btn.textContent = '✅ Copié !';
+					btn.style.background = '#28a745';
 
-						setTimeout(() => {
-							btn.textContent = originalText;
-							btn.style.background = '#667eea';
-						}, 2000);
-					})
-					.catch((err) => {
-						console.error('Error copying:', err);
-						alert(
-							'Erreur lors de la copie. Veuillez copier manuellement.'
-						);
-					});
+					setTimeout(() => {
+						btn.textContent = originalText;
+						btn.style.background = '#667eea';
+					}, 2000);
+				};
+
+				// Méthode 1: navigator.clipboard (moderne)
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					navigator.clipboard
+						.writeText(text)
+						.then(onSuccess)
+						.catch(() => {
+							// Fallback si clipboard API échoue
+							fallbackCopy(text, onSuccess);
+						});
+				} else {
+					// Méthode 2: Fallback pour navigateurs anciens
+					fallbackCopy(text, onSuccess);
+				}
+			}
+
+			// Méthode de copie alternative
+			function fallbackCopy(text, onSuccess) {
+				const textArea = document.createElement('textarea');
+				textArea.value = text;
+				textArea.style.position = 'fixed';
+				textArea.style.left = '-9999px';
+				textArea.style.top = '-9999px';
+				document.body.appendChild(textArea);
+				textArea.focus();
+				textArea.select();
+
+				try {
+					const successful = document.execCommand('copy');
+					document.body.removeChild(textArea);
+
+					if (successful) {
+						onSuccess();
+					} else {
+						alert('Copie impossible. URL: ' + text);
+					}
+				} catch (err) {
+					document.body.removeChild(textArea);
+					console.error('Fallback copy failed:', err);
+					alert('Copie impossible. URL: ' + text);
+				}
 			}
 
 			loadCalendars();
