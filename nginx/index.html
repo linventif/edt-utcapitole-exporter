@@ -92,6 +92,18 @@
 				transform: translateY(-2px);
 			}
 
+			.calendar-item.unavailable {
+				opacity: 0.6;
+				border-color: #dc3545;
+			}
+
+			.calendar-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 10px;
+			}
+
 			.calendar-name {
 				font-size: 1.3em;
 				font-weight: 600;
@@ -137,6 +149,12 @@
 
 			.copy-btn:active {
 				transform: scale(0.98);
+			}
+
+			.copy-btn:disabled {
+				background: #6c757d;
+				cursor: not-allowed;
+				opacity: 0.5;
 			}
 
 			.instructions {
@@ -190,6 +208,51 @@
 				margin-left: 10px;
 			}
 
+			.status.unavailable {
+				background: #dc3545;
+			}
+
+			.calendar-status {
+				display: flex;
+				gap: 15px;
+				margin-top: 10px;
+				font-size: 0.85em;
+				color: #6c757d;
+			}
+
+			.status-item {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+			}
+
+			.status-item::before {
+				content: '•';
+				color: #667eea;
+				font-weight: bold;
+			}
+
+			.next-refresh {
+				background: #fff3cd;
+				border-left: 4px solid #ffc107;
+				padding: 15px 20px;
+				border-radius: 8px;
+				margin-top: 20px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+
+			.next-refresh strong {
+				color: #856404;
+			}
+
+			.countdown {
+				font-size: 1.1em;
+				font-weight: 600;
+				color: #667eea;
+			}
+
 			@media (max-width: 768px) {
 				header h1 {
 					font-size: 1.8em;
@@ -217,6 +280,10 @@
 						Les calendriers sont automatiquement mis à jour toutes
 						les 6 heures.
 					</p>
+					<div class="next-refresh">
+						<strong>⏱️ Prochaine mise à jour dans:</strong>
+						<span class="countdown" id="countdown">Calcul...</span>
+					</div>
 				</div>
 
 				<div class="calendar-section">
@@ -271,6 +338,80 @@
 
 		<script>
 			const BASE_URL = window.location.origin;
+			const REFRESH_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+			let nextRefreshTime = null;
+
+			async function getFileInfo(calendarName) {
+				try {
+					const url = `/calendars/${calendarName}/${calendarName}.ics`;
+					const response = await fetch(url, { method: 'HEAD' });
+
+					if (!response.ok) {
+						return { available: false };
+					}
+
+					const lastModified = response.headers.get('Last-Modified');
+					const fileSize = response.headers.get('Content-Length');
+
+					return {
+						available: true,
+						lastModified: lastModified
+							? new Date(lastModified)
+							: null,
+						fileSize: fileSize ? parseInt(fileSize) : 0,
+					};
+				} catch (error) {
+					console.error(
+						`Error fetching info for ${calendarName}:`,
+						error
+					);
+					return { available: false };
+				}
+			}
+
+			function formatTimeAgo(date) {
+				if (!date) return 'Jamais';
+
+				const now = new Date();
+				const diffMs = now - date;
+				const diffMins = Math.floor(diffMs / 60000);
+				const diffHours = Math.floor(diffMs / 3600000);
+
+				if (diffMins < 1) return "À l'instant";
+				if (diffMins < 60) return `Il y a ${diffMins} min`;
+				if (diffHours < 24) return `Il y a ${diffHours}h`;
+
+				const diffDays = Math.floor(diffHours / 24);
+				return `Il y a ${diffDays}j`;
+			}
+
+			function formatFileSize(bytes) {
+				if (bytes < 1024) return bytes + ' B';
+				if (bytes < 1024 * 1024)
+					return (bytes / 1024).toFixed(1) + ' KB';
+				return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+			}
+
+			function updateCountdown() {
+				const countdownEl = document.getElementById('countdown');
+				if (!nextRefreshTime || !countdownEl) return;
+
+				const now = new Date();
+				const diff = nextRefreshTime - now;
+
+				if (diff <= 0) {
+					countdownEl.textContent = 'En cours...';
+					// Refresh will happen soon, reload page after a delay
+					setTimeout(() => window.location.reload(), 5000);
+					return;
+				}
+
+				const hours = Math.floor(diff / 3600000);
+				const minutes = Math.floor((diff % 3600000) / 60000);
+				const seconds = Math.floor((diff % 60000) / 1000);
+
+				countdownEl.textContent = `${hours}h ${minutes}m ${seconds}s`;
+			}
 
 			async function loadCalendars() {
 				const calendarList = document.getElementById('calendar-list');
@@ -296,10 +437,36 @@
 						calendars.push('IMMFA1TD01', 'IMMFA1CM01');
 					}
 
-					renderCalendars(calendars);
+					// Get file info for all calendars
+					const calendarsWithInfo = await Promise.all(
+						calendars.map(async (name) => {
+							const info = await getFileInfo(name);
+							return { name, ...info };
+						})
+					);
+
+					// Calculate next refresh time based on most recent update
+					const mostRecent = calendarsWithInfo
+						.filter((c) => c.lastModified)
+						.sort((a, b) => b.lastModified - a.lastModified)[0];
+
+					if (mostRecent && mostRecent.lastModified) {
+						nextRefreshTime = new Date(
+							mostRecent.lastModified.getTime() + REFRESH_INTERVAL
+						);
+					}
+
+					renderCalendars(calendarsWithInfo);
+
+					// Update countdown every second
+					updateCountdown();
+					setInterval(updateCountdown, 1000);
 				} catch (error) {
 					console.error('Error loading calendars:', error);
-					renderCalendars(['IMMFA1TD01', 'IMMFA1CM01']);
+					renderCalendars([
+						{ name: 'IMMFA1TD01', available: false },
+						{ name: 'IMMFA1CM01', available: false },
+					]);
 				}
 			}
 
@@ -307,18 +474,39 @@
 				const calendarList = document.getElementById('calendar-list');
 				calendarList.innerHTML = '';
 
-				calendars.forEach((calendarName) => {
-					const url = `${BASE_URL}/calendars/${calendarName}/${calendarName}.ics`;
+				calendars.forEach((calendar) => {
+					const url = `${BASE_URL}/calendars/${calendar.name}/${calendar.name}.ics`;
+					const statusClass = calendar.available ? '' : 'unavailable';
+					const statusBadge = calendar.available
+						? '<span class="status">Disponible</span>'
+						: '<span class="status unavailable">Indisponible</span>';
 
 					const item = document.createElement('div');
-					item.className = 'calendar-item';
+					item.className = `calendar-item ${statusClass}`;
 					item.innerHTML = `
-                    <div class="calendar-name">${calendarName}</div>
-                    <div class="calendar-url" id="url-${calendarName}">${url}</div>
-                    <button class="copy-btn" onclick="copyToClipboard('url-${calendarName}')">
-                        📋 Copier l'URL
-                    </button>
-                `;
+						<div class="calendar-header">
+							<div class="calendar-name">${calendar.name}</div>
+							${statusBadge}
+						</div>
+						${
+							calendar.available
+								? `
+							<div class="calendar-status">
+								<div class="status-item">Mis à jour: ${formatTimeAgo(
+									calendar.lastModified
+								)}</div>
+								<div class="status-item">Taille: ${formatFileSize(calendar.fileSize)}</div>
+							</div>
+						`
+								: ''
+						}
+						<div class="calendar-url" id="url-${calendar.name}">${url}</div>
+						<button class="copy-btn" onclick="copyToClipboard('url-${calendar.name}')" ${
+						!calendar.available ? 'disabled' : ''
+					}>
+							📋 Copier l'URL
+						</button>
+					`;
 
 					calendarList.appendChild(item);
 				});
