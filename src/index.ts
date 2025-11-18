@@ -1,6 +1,7 @@
 import puppeteer, { type Page } from 'puppeteer';
 import dotenv from 'dotenv';
 import * as path from 'path';
+import * as fs from 'fs';
 import { validateEnv } from './envSchema';
 import { login, selectDatabase } from './login';
 import { navigateTreePath } from './pathSelection';
@@ -71,7 +72,8 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 
 async function processCalendar(
 	page: Page,
-	calendarPath: { name: string; path: string[] }
+	calendarPath: { name: string; path: string[] },
+	downloadPath: string
 ): Promise<void> {
 	console.log(`\n${'='.repeat(60)}`);
 	console.log(`Processing calendar: ${calendarPath.name}`);
@@ -107,7 +109,7 @@ async function processCalendar(
 	const exportDir = path.join(process.cwd(), 'export', calendarPath.name);
 
 	// Export the calendar
-	await exportCalendar(page, env.DOWNLOAD_PATH, exportDir, filename);
+	await exportCalendar(page, downloadPath, exportDir, filename);
 
 	console.log(`\n✅ Successfully exported calendar: ${calendarPath.name}\n`);
 }
@@ -140,6 +142,24 @@ async function main() {
 	try {
 		const page = await browser.newPage();
 
+		// Set up download behavior - convert relative path to absolute
+		const downloadPath = path.isAbsolute(env.DOWNLOAD_PATH)
+			? env.DOWNLOAD_PATH
+			: path.join(process.cwd(), env.DOWNLOAD_PATH);
+
+		// Create downloads directory if it doesn't exist
+		if (!fs.existsSync(downloadPath)) {
+			fs.mkdirSync(downloadPath, { recursive: true });
+			console.log(`Created downloads directory: ${downloadPath}`);
+		}
+
+		// Configure browser download behavior
+		const client = await page.createCDPSession();
+		await client.send('Page.setDownloadBehavior', {
+			behavior: 'allow',
+			downloadPath: downloadPath,
+		});
+
 		// Enable console logging from the browser page
 		page.on('console', (msg) => {
 			const type = msg.type();
@@ -161,7 +181,7 @@ async function main() {
 				// Ensure we're still logged in before processing
 				await ensureLoggedIn(page);
 
-				await processCalendar(page, calendarPath);
+				await processCalendar(page, calendarPath, downloadPath);
 
 				// Navigate back to the tree root if there are more calendars to process
 				if (

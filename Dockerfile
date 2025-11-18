@@ -13,13 +13,12 @@ RUN apk add --no-cache \
 # Set Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
-    CHROMIUM_PATH=/usr/bin/chromium-browser \
-    DOWNLOAD_PATH=/app/downloads
+    CHROMIUM_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
 # Create necessary directories
-RUN mkdir -p /app/export /app/downloads
+RUN mkdir -p /app/export
 
 # Copy package files
 COPY package.json bun.lockb* ./
