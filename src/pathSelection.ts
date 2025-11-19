@@ -290,6 +290,50 @@ export async function navigateTreePath(
 						await new Promise((resolve) =>
 							setTimeout(resolve, 2000)
 						);
+
+						// Verify child nodes actually appeared
+						const nodesAfterExpand = await page.evaluate(() => {
+							const treeTexts = Array.from(
+								document.querySelectorAll(
+									'span.x-tree3-node-text'
+								)
+							);
+							return treeTexts.map((t) => t.textContent?.trim());
+						});
+						console.log(
+							`Nodes after expansion (${nodesAfterExpand.length}):`,
+							nodesAfterExpand
+						);
+
+						// If no new nodes appeared, try double-clicking the joint
+						if (nodesAfterExpand.length <= 3) {
+							console.log(
+								'⚠️  No child nodes appeared, trying double-click on joint...'
+							);
+							await page.evaluate((cellId) => {
+								const cell = document.getElementById(cellId);
+								if (cell) {
+									const jointImg = cell.querySelector(
+										'img.x-tree3-node-joint'
+									);
+									if (jointImg) {
+										const dblClickEvent = new MouseEvent(
+											'dblclick',
+											{
+												bubbles: true,
+												cancelable: true,
+												view: window,
+											}
+										);
+										jointImg.dispatchEvent(dblClickEvent);
+									}
+								}
+							}, nodeFound.cellId);
+
+							await new Promise((resolve) =>
+								setTimeout(resolve, 5000)
+							);
+						}
 					} else {
 						console.log(
 							`No joint found, clicking cell directly for "${nodeName}"`

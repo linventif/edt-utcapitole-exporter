@@ -188,6 +188,39 @@ async function resetTreeView(page: Page): Promise<boolean> {
 	}
 }
 
+async function cleanSessionAndRelogin(page: Page): Promise<void> {
+	console.log('🧹 Cleaning session and logging in fresh...');
+
+	try {
+		// Clear all cookies
+		const client = await page.target().createCDPSession();
+		await client.send('Network.clearBrowserCookies');
+		await client.send('Network.clearBrowserCache');
+		console.log('✓ Cookies and cache cleared');
+
+		// Navigate to fresh login page
+		await page.goto(
+			'https://ade-production.ut-capitole.fr/direct/index.jsp',
+			{
+				waitUntil: 'networkidle2',
+				timeout: 60000,
+			}
+		);
+
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+
+		// Perform fresh login
+		console.log('Performing fresh login...');
+		await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
+		await selectDatabase(page, DATABASE_NAME);
+
+		console.log('✅ Fresh session established');
+	} catch (error) {
+		console.error('Failed to clean session:', error);
+		throw error;
+	}
+}
+
 async function processCalendar(
 	page: Page,
 	calendarPath: { name: string; path: string[] },
@@ -325,35 +358,11 @@ async function main() {
 				// Only mark as successful after export completes
 				results.successful.push(calendarPath.name);
 
-				// Reset tree view for next calendar (except for the last one)
+				// Clean session and re-login for next calendar (except for the last one)
+				// This is necessary because the server invalidates the session after ICS export
 				if (i < CALENDAR_PATHS.length - 1) {
 					console.log('Preparing for next calendar...');
-					const resetSuccess = await resetTreeView(page);
-
-					if (!resetSuccess) {
-						console.warn(
-							'⚠️  Reset failed, forcing full page reload and re-authentication...'
-						);
-						// Force navigate to index.jsp and re-authenticate
-						await page.goto(
-							'https://ade-production.ut-capitole.fr/direct/index.jsp',
-							{
-								waitUntil: 'networkidle2',
-								timeout: 60000,
-							}
-						);
-						await new Promise((resolve) =>
-							setTimeout(resolve, 2000)
-						);
-						await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
-						await selectDatabase(page, DATABASE_NAME);
-						console.log(
-							'✅ Successfully recovered with full re-authentication'
-						);
-					} else {
-						// Check if still logged in after successful reset
-						await ensureLoggedIn(page);
-					}
+					await cleanSessionAndRelogin(page);
 				}
 			} catch (error) {
 				const errorMessage =
