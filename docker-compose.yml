@@ -11,6 +11,8 @@ services:
       - ./export:/app/export
     # Run export every 6 hours
     command: sh -c "while true; do bun run src/index.ts && sleep 21600; done"
+    labels:
+      - "com.dokploy.version=1"
 
   nginx:
     image: nginx:alpine
@@ -25,3 +27,5 @@ services:
       - ./nginx/404.html:/usr/share/nginx/html/404.html:ro
     depends_on:
       - exporter
+    labels:
+      - "com.dokploy.version=1"
