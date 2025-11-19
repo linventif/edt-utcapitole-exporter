@@ -139,17 +139,39 @@ async function ensureLoggedIn(page: Page): Promise<void> {
 	}
 }
 
-async function resetTreeView(page: Page): Promise<void> {
+async function resetTreeView(page: Page): Promise<boolean> {
 	console.log('Resetting tree view...');
 
 	try {
-		// Reload the page to reset tree state
-		await page.reload({
-			waitUntil: 'networkidle2',
-			timeout: 60000,
-		});
+		// Use ensureLoggedIn which will navigate to myplanning and handle session
+		// This is more robust than directly navigating
+		// First, give a moment after export
+		await new Promise((resolve) => setTimeout(resolve, 2000));
 
-		// Wait for tree to be ready again
+		// Force a check that will trigger navigation
+		const hasTree = await page
+			.evaluate(() => {
+				return (
+					document.querySelector('span.x-tree3-node-text') !== null
+				);
+			})
+			.catch(() => false);
+
+		if (!hasTree) {
+			// Navigate to myplanning.jsp
+			console.log('Tree not found, navigating to planning page...');
+			await page.goto(
+				'https://ade-production.ut-capitole.fr/direct/myplanning.jsp',
+				{
+					waitUntil: 'networkidle2',
+					timeout: 60000,
+				}
+			);
+
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+		}
+
+		// Wait for tree to be ready
 		await page.waitForSelector('span.x-tree3-node-text', {
 			visible: true,
 			timeout: 30000,
@@ -159,9 +181,10 @@ async function resetTreeView(page: Page): Promise<void> {
 
 		// Give it a moment to stabilize
 		await new Promise((resolve) => setTimeout(resolve, 2000));
+		return true;
 	} catch (error) {
 		console.error('Failed to reset tree view:', error);
-		throw error;
+		return false; // Return false instead of throwing
 	}
 }
 
@@ -298,14 +321,39 @@ async function main() {
 
 				// Process the calendar
 				await processCalendar(page, calendarPath, downloadPath);
+
+				// Only mark as successful after export completes
 				results.successful.push(calendarPath.name);
 
 				// Reset tree view for next calendar (except for the last one)
 				if (i < CALENDAR_PATHS.length - 1) {
 					console.log('Preparing for next calendar...');
-					await resetTreeView(page);
-					// Check if still logged in after reload
-					await ensureLoggedIn(page);
+					const resetSuccess = await resetTreeView(page);
+
+					if (!resetSuccess) {
+						console.warn(
+							'⚠️  Reset failed, forcing full page reload and re-authentication...'
+						);
+						// Force navigate to index.jsp and re-authenticate
+						await page.goto(
+							'https://ade-production.ut-capitole.fr/direct/index.jsp',
+							{
+								waitUntil: 'networkidle2',
+								timeout: 60000,
+							}
+						);
+						await new Promise((resolve) =>
+							setTimeout(resolve, 2000)
+						);
+						await login(page, env.AUTH_USERNAME, env.AUTH_PASSWORD);
+						await selectDatabase(page, DATABASE_NAME);
+						console.log(
+							'✅ Successfully recovered with full re-authentication'
+						);
+					} else {
+						// Check if still logged in after successful reset
+						await ensureLoggedIn(page);
+					}
 				}
 			} catch (error) {
 				const errorMessage =
