@@ -14,6 +14,7 @@ export const envSchema = z.object({
 		.string()
 		.default('false')
 		.transform((val) => val === 'true'),
+	DOCKER_VOLUME_PATH: z.string().optional(),
 });
 
 // Validate the environment variables

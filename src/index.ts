@@ -224,7 +224,8 @@ async function cleanSessionAndRelogin(page: Page): Promise<void> {
 async function processCalendar(
 	page: Page,
 	calendarPath: { name: string; path: string[] },
-	downloadPath: string
+	downloadPath: string,
+	dockerVolumePath?: string
 ): Promise<void> {
 	console.log(`\n${'='.repeat(60)}`);
 	console.log(`Processing calendar: ${calendarPath.name}`);
@@ -262,6 +263,31 @@ async function processCalendar(
 
 		// Export the calendar
 		await exportCalendar(page, downloadPath, exportDir, filename);
+
+		// If Docker volume path is configured, also copy to Docker volume
+		if (dockerVolumePath) {
+			console.log('Copying to Docker volume...');
+			const dockerExportDir = path.join(
+				dockerVolumePath,
+				calendarPath.name
+			);
+
+			// Ensure Docker volume directory exists
+			if (!fs.existsSync(dockerExportDir)) {
+				fs.mkdirSync(dockerExportDir, { recursive: true });
+			}
+
+			// Copy the exported file to Docker volume
+			const sourceFile = path.join(exportDir, `${filename}.ics`);
+			const destFile = path.join(dockerExportDir, `${filename}.ics`);
+
+			if (fs.existsSync(sourceFile)) {
+				fs.copyFileSync(sourceFile, destFile);
+				console.log(`✓ Copied to Docker volume: ${destFile}`);
+			} else {
+				console.warn(`⚠️  Source file not found: ${sourceFile}`);
+			}
+		}
 
 		console.log(
 			`\n✅ Successfully exported calendar: ${calendarPath.name}\n`
@@ -314,6 +340,22 @@ async function main() {
 			console.log(`Created downloads directory: ${downloadPath}`);
 		}
 
+		// Set up Docker volume path if configured
+		let dockerVolumePath: string | undefined;
+		if (env.DOCKER_VOLUME_PATH) {
+			dockerVolumePath = path.isAbsolute(env.DOCKER_VOLUME_PATH)
+				? env.DOCKER_VOLUME_PATH
+				: path.join(process.cwd(), env.DOCKER_VOLUME_PATH);
+
+			if (!fs.existsSync(dockerVolumePath)) {
+				fs.mkdirSync(dockerVolumePath, { recursive: true });
+				console.log(
+					`Created Docker volume directory: ${dockerVolumePath}`
+				);
+			}
+			console.log(`Docker volume exports enabled: ${dockerVolumePath}`);
+		}
+
 		// Configure browser download behavior
 		const client = await page.createCDPSession();
 		await client.send('Page.setDownloadBehavior', {
@@ -353,7 +395,12 @@ async function main() {
 				await ensureLoggedIn(page);
 
 				// Process the calendar
-				await processCalendar(page, calendarPath, downloadPath);
+				await processCalendar(
+					page,
+					calendarPath,
+					downloadPath,
+					dockerVolumePath
+				);
 
 				// Only mark as successful after export completes
 				results.successful.push(calendarPath.name);
