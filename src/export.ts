@@ -50,14 +50,16 @@ export async function exportCalendar(
 	console.log('Clicking export button to generate ICS file...');
 
 	await page.click('#x-auto-142');
-	console.log('Clicked export button');
+	console.log('✅ Clicked export button');
 
+	console.log('⏳ Waiting 2s for export dialog...');
 	await new Promise((resolve) => setTimeout(resolve, 2000));
 
 	// Set the export date range using EXPORT_TIME
 	console.log(
 		`🔧 Setting export END date to ${EXPORT_TIME} days from today...`
 	);
+	console.log('🔧 Starting date range configuration...');
 
 	// Wait for the export dialog to be visible
 	console.log('⏳ Waiting 1s for export dialog to be fully loaded...');
@@ -133,15 +135,23 @@ export async function exportCalendar(
 		await new Promise((resolve) => setTimeout(resolve, 1000));
 
 		// Verify calendar is visible
+		console.log('🔍 Checking if calendar is visible...');
 		const calendarVisible = await page.evaluate(() => {
-			const calendar = document.querySelector('.x-date-picker');
-			const leftArrow = document.querySelector('.x-date-left-icon');
-			const rightArrow = document.querySelector('.x-date-right-icon');
+			// Look specifically for the calendar inside the date menu popup
+			const calendar = document.querySelector(
+				'.x-date-menu .x-date-picker'
+			);
+			const leftArrow = document.querySelector(
+				'.x-date-menu .x-date-left-icon'
+			);
+			const rightArrow = document.querySelector(
+				'.x-date-menu .x-date-right-icon'
+			);
 			const monthButton = document.querySelector(
-				'.x-date-middle button.x-btn-text'
+				'.x-date-menu .x-date-middle button.x-btn-text'
 			);
 
-			console.log('🔍 Calendar elements check:');
+			console.log('🔍 Calendar elements check (in date menu):');
 			console.log('  - Calendar picker:', calendar ? '✓' : '✗');
 			console.log('  - Left arrow:', leftArrow ? '✓' : '✗');
 			console.log('  - Right arrow:', rightArrow ? '✓' : '✗');
@@ -153,8 +163,13 @@ export async function exportCalendar(
 				);
 			}
 
-			return !!calendar;
+			const isVisible = !!calendar;
+			console.log(`  - Calendar visible result: ${isVisible}`);
+
+			return isVisible;
 		});
+
+		console.log(`📊 DEBUG: calendarVisible = ${calendarVisible}`);
 
 		if (!calendarVisible) {
 			console.warn(
@@ -201,204 +216,238 @@ export async function exportCalendar(
 			}/${targetDate.year}`
 		);
 
-		// Navigate to the correct month if needed
-		const monthsToNavigate =
-			(targetDate.year - targetDate.todayYear) * 12 +
-			(targetDate.month - targetDate.todayMonth);
-
-		// Focus on the calendar picker for keyboard navigation
+		// Navigate to the correct month using the month picker overlay
+		console.log(`🎯 Navigating to target month using month picker...`);
 		console.log(
-			'🎯 Focusing on calendar picker for keyboard navigation...'
+			`📅 Current: ${targetDate.todayMonth + 1}/${
+				targetDate.todayYear
+			}, Target: ${targetDate.month + 1}/${targetDate.year}`
 		);
-		const focused = await page.evaluate(() => {
-			// Find the calendar picker that's currently visible
-			const calendar = document.querySelector(
-				'.x-date-picker'
-			) as HTMLElement;
-			if (calendar) {
-				calendar.focus();
-				console.log('✓ Calendar picker focused');
-				return true;
-			} else {
-				console.log('✗ Calendar picker not found');
-				return false;
-			}
-		});
 
-		if (!focused) {
-			console.warn(
-				'⚠️ Could not focus calendar picker, trying input field...'
+		// First check if month picker is already open
+		let monthPickerVisible = await page.evaluate(() => {
+			// Look for month picker in the date menu popup only
+			const monthPicker = document.querySelector(
+				'.x-date-menu .x-date-mp'
 			);
-			await page.evaluate(() => {
-				const labels = Array.from(
-					document.querySelectorAll('label.x-form-item-label')
-				);
-				const endDateLabel = labels.find((label) =>
-					label.textContent?.includes('End Date')
-				);
-				if (endDateLabel) {
-					const formItem = endDateLabel.closest('.x-form-item');
-					if (formItem) {
-						const input = formItem.querySelector(
-							'input.x-form-field'
-						) as HTMLInputElement;
-						if (input) {
-							input.focus();
-							console.log('✓ End Date input focused as fallback');
-						}
-					}
-				}
-			});
-		}
-		await new Promise((resolve) => setTimeout(resolve, 500));
-
-		if (monthsToNavigate > 0) {
-			console.log(
-				`➡️ Navigating ${monthsToNavigate} month(s) forward...`
-			);
-			for (let i = 0; i < monthsToNavigate; i++) {
-				console.log(`  Month ${i + 1}/${monthsToNavigate}...`);
-				// Use CTRL+ArrowRight to navigate months
-				await page.keyboard.down('Control');
-				await page.keyboard.press('ArrowRight');
-				await page.keyboard.up('Control');
-				console.log('  ✓ Pressed Ctrl+ArrowRight');
-				await new Promise((resolve) => setTimeout(resolve, 500));
-			}
-			console.log('✅ Month navigation complete');
-		} else if (monthsToNavigate < 0) {
-			console.log(
-				`⬅️ Navigating ${Math.abs(
-					monthsToNavigate
-				)} month(s) backward...`
-			);
-			for (let i = 0; i < Math.abs(monthsToNavigate); i++) {
+			if (monthPicker) {
+				const style = window.getComputedStyle(monthPicker);
+				const isOpen = style.display !== 'none';
 				console.log(
-					`  Month ${i + 1}/${Math.abs(monthsToNavigate)}...`
+					`🔍 Month picker already open: ${isOpen}, display: ${style.display}`
 				);
-				// Use CTRL+ArrowLeft to navigate months backward
-				await page.keyboard.down('Control');
-				await page.keyboard.press('ArrowLeft');
-				await page.keyboard.up('Control');
-				console.log('  ✓ Pressed Ctrl+ArrowLeft');
-				await new Promise((resolve) => setTimeout(resolve, 500));
+				return isOpen;
 			}
-			console.log('✅ Month navigation complete');
-		} else {
-			console.log('✓ Already in correct month, no navigation needed');
-		}
-
-		// Wait a bit longer for the calendar to stabilize after navigation
-		console.log('⏳ Waiting for calendar to stabilize after navigation...');
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-
-		// Verify which month is actually displayed
-		const displayedMonth = await page.evaluate(() => {
-			const monthButton = document.querySelector(
-				'.x-date-middle button.x-btn-text'
-			);
-			return monthButton ? monthButton.textContent?.trim() : null;
+			return false;
 		});
-		console.log(`📅 Calendar now showing: ${displayedMonth || 'UNKNOWN'}`);
 
-		// Double-check the calendar is still open and showing the right month
-		const calendarStillValid = await page.evaluate(
-			(expectedMonth, expectedYear) => {
+		// If month picker is not already open, click the month button to open it
+		if (!monthPickerVisible) {
+			console.log('🖱️ Clicking month button to open month picker...');
+			const monthButtonClicked = await page.evaluate(() => {
+				// Click the month button in the date menu popup only
 				const monthButton = document.querySelector(
-					'.x-date-middle button.x-btn-text'
-				);
-				const monthText = monthButton
-					? monthButton.textContent?.trim()
-					: '';
-
-				// Check if calendar is showing the expected month/year
-				const monthNames = [
-					'January',
-					'February',
-					'March',
-					'April',
-					'May',
-					'June',
-					'July',
-					'August',
-					'September',
-					'October',
-					'November',
-					'December',
-				];
-				const expectedText = `${monthNames[expectedMonth]} ${expectedYear}`;
-
-				console.log(
-					`🔍 Expecting: "${expectedText}", Found: "${monthText}"`
-				);
-				return monthText === expectedText;
-			},
-			targetDate.month,
-			targetDate.year
-		);
-
-		if (!calendarStillValid) {
-			console.warn(
-				'⚠️ Calendar not showing correct month! Re-opening calendar...'
-			);
-
-			// Re-click the End Date trigger to open calendar again
-			const reopened = await page.evaluate(() => {
-				const labels = Array.from(
-					document.querySelectorAll('label.x-form-item-label')
-				);
-				const endDateLabel = labels.find((label) =>
-					label.textContent?.includes('End Date')
-				);
-				if (endDateLabel) {
-					const formItem = endDateLabel.closest('.x-form-item');
-					if (formItem) {
-						const trigger = formItem.querySelector(
-							'img.x-form-trigger.x-form-date-trigger'
-						);
-						if (trigger) {
-							(trigger as HTMLElement).click();
-							return true;
-						}
-					}
+					'.x-date-menu .x-date-middle button.x-btn-text'
+				) as HTMLElement;
+				if (monthButton) {
+					console.log(
+						'✓ Found month button:',
+						monthButton.textContent?.trim()
+					);
+					monthButton.click();
+					return true;
+				} else {
+					console.log('✗ Month button not found');
+					return false;
 				}
-				return false;
 			});
 
-			if (reopened) {
-				console.log('✓ Calendar re-opened, waiting...');
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+			if (!monthButtonClicked) {
+				console.warn(
+					'⚠️ Could not click month button, skipping navigation'
+				);
+			} else {
+				console.log('✅ Month button clicked');
+
+				// Wait for month picker overlay to appear
+				console.log('⏳ Waiting for month picker overlay to appear...');
+				await new Promise((resolve) => setTimeout(resolve, 500));
+
+				// Verify month picker is visible
+				monthPickerVisible = await page.evaluate(() => {
+					// Check month picker in date menu popup only
+					const monthPicker = document.querySelector(
+						'.x-date-menu .x-date-mp'
+					);
+					if (monthPicker) {
+						const style = window.getComputedStyle(monthPicker);
+						const isVisible = style.display !== 'none';
+						console.log(
+							'✓ Month picker found, display:',
+							style.display
+						);
+						return isVisible;
+					} else {
+						console.log('✗ Month picker not found');
+						return false;
+					}
+				});
 			}
+		} else {
+			console.log('✅ Month picker is already open');
 		}
+
+		if (monthPickerVisible) {
+			console.log('✅ Month picker is visible');
+
+			// Click the target month in the picker
+			const monthNames = [
+				'Jan',
+				'Feb',
+				'Mar',
+				'Apr',
+				'May',
+				'Jun',
+				'Jul',
+				'Aug',
+				'Sep',
+				'Oct',
+				'Nov',
+				'Dec',
+			];
+			const targetMonthName = monthNames[targetDate.month];
+
+			console.log(`🖱️ Clicking month "${targetMonthName}" in picker...`);
+			const monthClicked = await page.evaluate((monthName) => {
+				// Click month in the date menu popup only
+				const monthCells = Array.from(
+					document.querySelectorAll('.x-date-menu .x-date-mp-month a')
+				);
+				const targetCell = monthCells.find(
+					(cell) => cell.textContent?.trim() === monthName
+				);
+				if (targetCell) {
+					console.log(`✓ Found month "${monthName}", clicking...`);
+					(targetCell as HTMLElement).click();
+					return true;
+				} else {
+					console.log(`✗ Month "${monthName}" not found`);
+					return false;
+				}
+			}, targetMonthName);
+
+			if (!monthClicked) {
+				console.warn(`⚠️ Could not click month "${targetMonthName}"`);
+			} else {
+				console.log(`✅ Clicked month "${targetMonthName}"`);
+			}
+
+			// Wait a bit for the month to be selected
+			await new Promise((resolve) => setTimeout(resolve, 300));
+
+			// Click the year if needed (should already be 2025)
+			if (targetDate.year !== targetDate.todayYear) {
+				console.log(
+					`🖱️ Clicking year "${targetDate.year}" in picker...`
+				);
+				const yearClicked = await page.evaluate((year) => {
+					// Click year in the date menu popup only
+					const yearCells = Array.from(
+						document.querySelectorAll(
+							'.x-date-menu .x-date-mp-year a'
+						)
+					);
+					const targetCell = yearCells.find(
+						(cell) => cell.textContent?.trim() === year.toString()
+					);
+					if (targetCell) {
+						console.log(`✓ Found year "${year}", clicking...`);
+						(targetCell as HTMLElement).click();
+						return true;
+					} else {
+						console.log(`✗ Year "${year}" not found`);
+						return false;
+					}
+				}, targetDate.year);
+
+				if (!yearClicked) {
+					console.warn(
+						`⚠️ Could not click year "${targetDate.year}"`
+					);
+				} else {
+					console.log(`✅ Clicked year "${targetDate.year}"`);
+				}
+
+				await new Promise((resolve) => setTimeout(resolve, 300));
+			}
+
+			// Click OK button in the month picker
+			console.log('🖱️ Clicking OK button in month picker...');
+			const okClicked = await page.evaluate(() => {
+				// Click OK in the date menu popup only
+				const okButton = document.querySelector(
+					'.x-date-menu .x-date-mp-ok'
+				) as HTMLElement;
+				if (okButton) {
+					console.log('✓ Found OK button, clicking...');
+					okButton.click();
+					return true;
+				} else {
+					console.log('✗ OK button not found');
+					return false;
+				}
+			});
+
+			if (!okClicked) {
+				console.warn('⚠️ Could not click OK button in month picker');
+			} else {
+				console.log('✅ OK button clicked in month picker');
+			}
+
+			// Wait for month picker to close and calendar to update
+			console.log('⏳ Waiting for calendar to update...');
+			await new Promise((resolve) => setTimeout(resolve, 800));
+
+			// Verify the month changed
+			const updatedMonth = await page.evaluate(() => {
+				// Check month in the date menu popup only
+				const monthButton = document.querySelector(
+					'.x-date-menu .x-date-middle button.x-btn-text'
+				);
+				return monthButton
+					? monthButton.textContent?.trim()
+					: 'UNKNOWN';
+			});
+			console.log(`📅 Calendar now showing: ${updatedMonth}`);
+		} else {
+			console.warn('⚠️ Month picker not visible, skipping navigation');
+		}
+
+		// Wait for the calendar to stabilize
+		console.log('⏳ Waiting for calendar to stabilize...');
+		await new Promise((resolve) => setTimeout(resolve, 500));
 
 		// Click the target day
 		console.log(`🔍 Looking for day ${targetDate.day} in calendar...`);
 
-		// First, double-check we're on the right month RIGHT before clicking
-		const monthBeforeClick = await page.evaluate(() => {
-			const monthButton = document.querySelector(
-				'.x-date-middle button.x-btn-text'
-			);
-			return monthButton ? monthButton.textContent?.trim() : null;
+		// Clear any selection before clicking the day
+		console.log('🧹 Clearing selection before clicking day...');
+		await page.evaluate(() => {
+			const selection = window.getSelection();
+			if (selection) {
+				selection.removeAllRanges();
+				console.log('✓ Selection cleared');
+			}
 		});
-		console.log(
-			`📅 Month immediately before clicking day: ${monthBeforeClick}`
-		);
-
-		// If not on correct month, try navigating one more time
-		if (!monthBeforeClick?.includes('December') && monthsToNavigate > 0) {
-			console.warn(
-				'⚠️ Calendar reverted to wrong month! Re-navigating...'
-			);
-			console.log('🔄 Pressing ArrowRight key again...');
-			await page.keyboard.press('ArrowRight');
-			await new Promise((resolve) => setTimeout(resolve, 800));
-		}
+		await new Promise((resolve) => setTimeout(resolve, 300));
 
 		const dayClicked = await page.evaluate((day) => {
 			// Only look for cells with x-date-active (current month) and NOT x-date-prevday or x-date-nextday
+			// AND only in the date menu popup
 			const dateCells = Array.from(
-				document.querySelectorAll('td[role="presentation"]')
+				document.querySelectorAll(
+					'.x-date-menu td[role="presentation"]'
+				)
 			);
 
 			// Filter to only cells from the current month (have x-date-active but not x-date-prevday or x-date-nextday)
@@ -426,10 +475,19 @@ export async function exportCalendar(
 				console.log(
 					`✓ Found target cell for day ${day} in current month`
 				);
-				// Click the TD element itself, not the link inside
-				console.log(`✓ Clicking TD for day ${day}...`);
-				(targetCell as HTMLElement).click();
-				return true;
+				// Click the anchor link inside the TD, not the TD itself
+				const anchor = targetCell.querySelector('a[role="gridcell"]');
+				if (anchor) {
+					console.log(`✓ Clicking anchor link for day ${day}...`);
+					(anchor as HTMLElement).click();
+					return true;
+				} else {
+					console.log(`✗ Anchor link not found for day ${day}`);
+					// Fallback to clicking TD
+					console.log(`✓ Fallback: Clicking TD for day ${day}...`);
+					(targetCell as HTMLElement).click();
+					return true;
+				}
 			} else {
 				console.log(
 					`✗ Target cell for day ${day} not found in current month`
@@ -515,41 +573,63 @@ export async function exportCalendar(
 			if (reopened) {
 				await new Promise((resolve) => setTimeout(resolve, 1000));
 
-				// Focus the input and navigate to December again using CTRL+Arrow keys
+				// Use the month picker to navigate to the correct month
+				console.log(
+					'🔄 Retry: Opening month picker and selecting correct month...'
+				);
+
+				// Click the month button
 				await page.evaluate(() => {
-					const labels = Array.from(
-						document.querySelectorAll('label.x-form-item-label')
-					);
-					const endDateLabel = labels.find((label) =>
-						label.textContent?.includes('End Date')
-					);
-					if (endDateLabel) {
-						const formItem = endDateLabel.closest('.x-form-item');
-						if (formItem) {
-							const input = formItem.querySelector(
-								'input.x-form-field'
-							) as HTMLInputElement;
-							if (input) {
-								input.focus();
-							}
-						}
+					// Click in date menu popup only
+					const monthButton = document.querySelector(
+						'.x-date-menu .x-date-middle button.x-btn-text'
+					) as HTMLElement;
+					if (monthButton) {
+						monthButton.click();
 					}
 				});
 				await new Promise((resolve) => setTimeout(resolve, 500));
 
-				for (let i = 0; i < monthsToNavigate; i++) {
-					await page.keyboard.down('Control');
-					await page.keyboard.press('ArrowRight');
-					await page.keyboard.up('Control');
-					await new Promise((resolve) => setTimeout(resolve, 500));
-				}
+				// Click December in the month picker
+				await page.evaluate(() => {
+					// Click in date menu popup only
+					const monthCells = Array.from(
+						document.querySelectorAll(
+							'.x-date-menu .x-date-mp-month a'
+						)
+					);
+					const decCell = monthCells.find(
+						(cell) => cell.textContent?.trim() === 'Dec'
+					);
+					if (decCell) {
+						console.log(
+							'🔄 Retry: Clicking Dec in month picker...'
+						);
+						(decCell as HTMLElement).click();
+					}
+				});
+				await new Promise((resolve) => setTimeout(resolve, 300));
 
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+				// Click OK in month picker
+				await page.evaluate(() => {
+					// Click in date menu popup only
+					const okButton = document.querySelector(
+						'.x-date-menu .x-date-mp-ok'
+					) as HTMLElement;
+					if (okButton) {
+						console.log('🔄 Retry: Clicking OK in month picker...');
+						okButton.click();
+					}
+				});
+				await new Promise((resolve) => setTimeout(resolve, 800));
 
 				// Click day 23 again
 				await page.evaluate((day) => {
+					// Click in date menu popup only
 					const dateCells = Array.from(
-						document.querySelectorAll('td[role="presentation"]')
+						document.querySelectorAll(
+							'.x-date-menu td[role="presentation"]'
+						)
 					);
 					const currentMonthCells = dateCells.filter((cell) => {
 						const classes = cell.className;
@@ -566,8 +646,18 @@ export async function exportCalendar(
 					});
 
 					if (targetCell) {
-						console.log(`🔄 Re-clicking TD for day ${day}...`);
-						(targetCell as HTMLElement).click();
+						// Click the anchor link, not the TD
+						const anchor =
+							targetCell.querySelector('a[role="gridcell"]');
+						if (anchor) {
+							console.log(
+								`🔄 Re-clicking anchor link for day ${day}...`
+							);
+							(anchor as HTMLElement).click();
+						} else {
+							console.log(`🔄 Re-clicking TD for day ${day}...`);
+							(targetCell as HTMLElement).click();
+						}
 					}
 				}, targetDate.day);
 
@@ -581,17 +671,6 @@ export async function exportCalendar(
 			console.warn('⚠️ Could not verify End Date input value');
 		}
 	}
-
-	// ⚠️ BREAKPOINT: Pausing here to inspect the calendar state
-	console.log(
-		'⚠️ BREAKPOINT: Calendar should be set. Waiting 60 seconds for inspection...'
-	);
-	console.log(
-		'⚠️ Check the browser to verify the date is correct before proceeding.'
-	);
-	debugger; // This will pause if running with --inspect flag
-	await new Promise((resolve) => setTimeout(resolve, 60000)); // 60 second wait
-	console.log('⚠️ BREAKPOINT: Resuming after 60 seconds...');
 
 	console.log('Looking for OK button in popup...');
 	const okClicked = await page.evaluate(() => {
