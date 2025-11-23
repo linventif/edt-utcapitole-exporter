@@ -1,6 +1,8 @@
 # ADE UT Capitole Calendar Exporter
 
-Automatic calendar export service for UT Capitole ADE schedules with Docker deployment.
+**Automated calendar exporter for UT Capitole ADE schedules using headless browser automation.**
+
+This service logs into the UT Capitole ADE (timetable) system using Puppeteer, navigates through the calendar interface, and exports ICS files for specified course groups. It automatically sets the export date range to 31 days ahead, handles ExtJS calendar navigation, and exports files every 6 hours. The exported calendars are served via Nginx with a beautiful dashboard, making them accessible for subscription in Google Calendar, Proton Calendar, or any ICS-compatible application. Perfect for students who want automatic, always-up-to-date calendar subscriptions without manual exports. Deployable with a single Docker Compose command and supports Cloudflare Tunnel for public access.
 
 ## Features
 
