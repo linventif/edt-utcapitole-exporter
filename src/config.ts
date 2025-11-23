@@ -35,16 +35,16 @@ export const CALENDAR_PATHS: CalendarPath[] = [
 			'IMMFA1TD03',
 		],
 	},
-	{
-		name: 'IMMFA1TD04',
-		path: [
-			'Trainees',
-			'UFR Informatique',
-			'M1 MIAGE',
-			'IMMFA1TD',
-			'IMMFA1TD04',
-		],
-	},
+//	{
+//		name: 'IMMFA1TD04',
+//		path: [
+//			'Trainees',
+//			'UFR Informatique',
+//			'M1 MIAGE',
+//			'IMMFA1TD',
+//			'IMMFA1TD04',
+//		],
+//	},
 	{
 		name: 'IMMFA1CM01',
 		path: [
